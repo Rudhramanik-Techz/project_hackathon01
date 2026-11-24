@@ -1,0 +1,10 @@
+[
+  {
+    "role": "user",
+    "content": [
+      {
+        "text": "A message says: 'This is CBI. Your Aadhaar is linked to money laundering. Stay on video call and transfer funds for verification.' Matched reasons: authority impersonation, video-call custody demand, payment request. In 2 sentences of simple Hindi, explain why this is a scam. Reply ONLY as JSON: {\"explanation\": \"...\"}"
+      }
+    ]
+  }
+]
