@@ -1,8 +1,10 @@
 // Case-model invariants (v3 §4/§6). Run: npm test  (esbuild bundle + node:test, no extra dependencies)
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { type Action, type CaseState, type Candidate, facts, newCase, reducer, validate } from "../src/case/model";
-import { buildNcrpCards } from "../src/pack/ncrp";
+import { type Action, type CaseState, type Candidate, facts, type FieldName, hasDraft, newCase, reducer, validate } from "../src/case/model";
+import { redact } from "../src/lib/checker";
+import { buildBankEmail } from "../src/pack/email";
+import { buildDescription, buildNcrpCards } from "../src/pack/ncrp";
 import { build1930Script } from "../src/pack/script";
 
 (globalThis as { URL: typeof URL }).URL.revokeObjectURL = () => {};
@@ -102,12 +104,48 @@ test("attestation records the revision; new facts make it stale, view changes do
   assert.notEqual(c.attest.submittedPortal, c.factsRev);
 });
 
-test("re-reading an image withdraws facts that depended on its old reading", () => {
+test("a re-read keeps confirmed facts unless it actually returns a new reading", () => {
   let c = read(withImage(newCase("personal", 0), "imgA"), "imgA", "k1", A);
   const id = c.txs[0]!.id;
   c = run(c, { type: "accept", txId: id, field: "upiRef" }, { type: "consent", imageId: "imgA", value: true });
-  c = run(c, { type: "sending", generation: c.generation, imageId: "imgA", attemptId: "k2" });
-  assert.equal(c.txs[0]!.fields.upiRef.state, "empty");
+  const sending = run(c, { type: "sending", generation: c.generation, imageId: "imgA", attemptId: "k2" });
+  assert.equal(facts(sending).txs[0]!.upiRef, "012345678901", "tapping read again changes nothing yet");
+  const owner = { generation: c.generation, imageId: "imgA", attemptId: "k2" };
+  const failed = run(sending, { type: "ocrFailed", ...owner, code: "NETWORK" });
+  const left = run(sending, { type: "revokePending" });
+  const empty = run(sending, { type: "ocrResult", ...owner, candidates: [], meta: null, extraction: "live" });
+  for (const s of [failed, left, empty]) {
+    assert.equal(facts(s).txs[0]!.upiRef, "012345678901");
+    assert.equal(s.images[0]!.candidates.length, A.length);
+  }
+  // The surviving pool can still be used, and still says which attempt produced it.
+  const reused = run(failed, { type: "propose", txId: id, field: "upiRef", candidate: A[2]!, imageId: "imgA" });
+  const f = reused.txs[0]!.fields.upiRef;
+  assert.ok(f.state === "proposed" && f.source.attemptId === "k1");
+});
+
+test("a new reading replaces the pool: facts from the old one are withdrawn, typed facts survive", () => {
+  let c = read(withImage(newCase("personal", 0), "imgA"), "imgA", "k1", A);
+  const id = c.txs[0]!.id;
+  c = run(c, { type: "accept", txId: id, field: "upiRef" }, { type: "edit", txId: id, field: "bankName", text: "SBI" },
+    { type: "confirmEdit", txId: id, field: "bankName" }, { type: "consent", imageId: "imgA", value: true });
+  c = read(c, "imgA", "k2", [cand("c1", "upiRef", "999999999999")]);
+  assert.equal(c.txs.length, 1);
+  assert.equal(facts(c).txs[0]!.upiRef, "");
+  assert.equal(facts(c).txs[0]!.bankName, "SBI");
+  const f = c.txs[0]!.fields.upiRef;
+  assert.ok(f.state === "proposed" && f.value === "999999999999" && f.source.attemptId === "k2");
+});
+
+test("only a real case with something in it needs confirmation before a demo replaces it", () => {
+  const fresh = newCase("personal", 0);
+  assert.equal(hasDraft(fresh), false);
+  assert.equal(hasDraft(run(fresh, { type: "addTx" })), false);
+  assert.equal(hasDraft(run(fresh, { type: "info", key: "name", value: "A" })), true);
+  assert.equal(hasDraft(withImage(fresh, "imgA")), true);
+  const id = run(fresh, { type: "addTx" });
+  assert.equal(hasDraft(run(id, { type: "edit", txId: id.txs[0]!.id, field: "bankName", text: "SBI" })), true);
+  assert.equal(hasDraft(run(fresh, { type: "reset", origin: "synthetic" }, { type: "info", key: "name", value: "A" })), false);
 });
 
 test("amount parsing is exact paise; no guessing", () => {
@@ -145,4 +183,82 @@ test("loading a demo seed twice gives one clean synthetic case (StrictMode doubl
   assert.equal(c.txs.length, 1);
   assert.equal(c.txs[0]!.fields.upiRef.state, "proposed");
   assert.equal(c.images[0]!.extraction, "precomputed");
+});
+
+function typed(values: Partial<Record<FieldName, string>>): CaseState {
+  let c = run(newCase("personal", 0), { type: "addTx" });
+  const txId = c.txs[0]!.id;
+  for (const [field, text] of Object.entries(values) as [FieldName, string][])
+    c = run(c, { type: "edit", txId, field, text }, { type: "confirmEdit", txId, field });
+  return c;
+}
+
+test("script leaves unconfirmed details unsaid, in every language", () => {
+  const f = facts(typed({ amountPaise: "500" }));
+  for (const [lang, placeholder] of [["en", /not known|UPI ID|account/], ["hi", /पता नहीं|UPI ID|खाते/], ["ta", /குறிப்பு எண்|UPI ID|கணக்கி/]] as const) {
+    const script = build1930Script(f, lang, []);
+    assert.match(script, /500/);
+    assert.doesNotMatch(script, placeholder, lang);
+  }
+});
+
+test("money received is never described as sent, nor its receiving ID as the suspect's", () => {
+  const f = facts(typed({ amountPaise: "500", receiverVpa: "me@okbank", direction: "incoming", paymentStatus: "completed" }));
+  const script = build1930Script(f, "en", []);
+  assert.match(script, /Received at UPI ID me@okbank/);
+  assert.doesNotMatch(script, /Sent to|not sure/);
+  assert.doesNotMatch(buildDescription(f, [], []), / to me@okbank|held/);
+  const cards = buildNcrpCards(f, [], []);
+  assert.ok(!cards.flatMap((x) => x.fields).some((x) => /Suspect/.test(x.label) && x.value.includes("me@okbank")));
+  assert.doesNotMatch(buildBankEmail(f).body, / to UPI ID|hold the amount/);
+});
+
+test("an empty case claims no loss and asks for no freeze; a confirmed payment asks for a hold", () => {
+  const empty = facts(newCase("personal", 0));
+  const description = buildDescription(empty, [], []);
+  assert.match(description, /suspected/);
+  assert.doesNotMatch(description, /was defrauded|held|frozen/);
+  assert.doesNotMatch(buildBankEmail(empty).body, /hold the amount/);
+  const paid = facts(typed({ receiverVpa: "x@okbank", direction: "outgoing", paymentStatus: "completed" }));
+  assert.match(buildDescription(paid, [], []), /amount held/);
+  assert.match(buildBankEmail(paid).body, /hold the amount/);
+});
+
+test("redaction hides digits written in Indian scripts too", () => {
+  for (const text of ["OTP 482913", "ओटीपी ४८२९१३", "ஓடிபி ௪௮௨௯௧௩", "card 4111 1111 1111 1111"])
+    assert.doesNotMatch(redact(text), /\p{Nd}/u, text);
+  assert.equal(redact("at 9 pm pay 50"), "at 9 pm pay 50");
+});
+
+test("removing or replacing a screenshot withdraws corrected values; independently typed ones survive", () => {
+  let base = read(withImage(newCase("personal", 0), "imgA"), "imgA", "k1", A);
+  const id = base.txs[0]!.id;
+  base = run(base,
+    { type: "edit", txId: id, field: "upiRef", text: "222222222222" }, { type: "confirmEdit", txId: id, field: "upiRef" }, // corrected
+    { type: "edit", txId: id, field: "amountPaise", text: "75" }, // mid-edit of a reading
+    { type: "edit", txId: id, field: "bankName", text: "SBI" }, { type: "confirmEdit", txId: id, field: "bankName" }, // typed
+    { type: "consent", imageId: "imgA", value: true });
+  const corrected = base.txs[0]!.fields.upiRef;
+  assert.ok(corrected.state === "confirmed" && corrected.method === "corrected");
+  const removed = run(base, { type: "removeImage", imageId: "imgA" });
+  const replaced = read(base, "imgA", "k2", [cand("n1", "senderVpa", "a@okbank")]);
+  for (const s of [removed, replaced]) {
+    const f = s.txs[0]!.fields;
+    assert.equal(f.upiRef.state, "empty");
+    assert.equal(f.amountPaise.state, "empty");
+    assert.equal(facts(s).txs[0]!.bankName, "SBI");
+  }
+});
+
+test("a payment whose direction is not confirmed is never listed as the suspect's nor held", () => {
+  const f = facts(typed({ receiverVpa: "me@okbank" }));
+  const cards = buildNcrpCards(f, [], []);
+  assert.ok(!cards.flatMap((x) => x.fields).some((x) => /^Suspect/.test(x.label) && x.value.includes("me@okbank")));
+  assert.doesNotMatch(buildDescription(f, [], []), /held/);
+  assert.doesNotMatch(buildBankEmail(f).body, /hold the amount/);
+});
+
+test("the script does not count a payment row with nothing in it", () => {
+  const f = facts(run(newCase("personal", 0), { type: "addTx" }));
+  assert.doesNotMatch(build1930Script(f, "en", []), /1 payment|Payment 1/);
 });

@@ -15,13 +15,12 @@ export function Crop({ url, width, height, box, label }: { url: string; width: n
     <div
       role="img"
       aria-label={label}
-      className="mt-2 w-full rounded-lg border-2 border-sky-500 bg-white"
+      className="crop"
       style={{
         aspectRatio: `${aspect}`,
         // Cap the width so height stays <= 5.5rem without distorting the crop on wide screens.
         maxWidth: `min(100%, calc(5.5rem * ${aspect.toFixed(3)}))`,
         backgroundImage: `url("${url}")`,
-        backgroundRepeat: "no-repeat",
         backgroundSize: `${100 / w}% ${100 / h}%`,
         backgroundPosition: `${pos(l, w)}% ${pos(t, h)}%`,
       }}

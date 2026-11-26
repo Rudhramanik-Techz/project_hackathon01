@@ -81,7 +81,8 @@ export interface ImageRec {
   height: number;
   consent: boolean;
   state: ImageState;
-  attemptId: string | null;
+  attemptId: string | null; // the latest attempt, which alone may deliver a result
+  poolAttemptId: string | null; // the attempt that produced the current candidates
   candidates: Candidate[];
   extraction: Extraction | null;
   meta: OcrMeta | null;
@@ -131,10 +132,9 @@ export function newCase(origin: Origin, generation: number, scenarioClock: strin
 
 // ------------------------------------------------------------------------------------------ validation
 
-const DIGITS: Record<string, string> = {};
-"०१२३४५६७८९".split("").forEach((d, i) => (DIGITS[d] = String(i)));
-"௦௧௨௩௪௫௬௭௮௯".split("").forEach((d, i) => (DIGITS[d] = String(i)));
-const asciiDigits = (s: string) => s.replace(/[०-९௦-௯]/g, (d) => DIGITS[d] ?? d);
+/** Digits typed in an Indian script (Devanagari, Bengali, Tamil, Telugu, Kannada, Malayalam) are read as 0-9. */
+export const asciiDigits = (s: string) =>
+  s.replace(/[\u0966-\u096f\u09e6-\u09ef\u0be6-\u0bef\u0c66-\u0c6f\u0ce6-\u0cef\u0d66-\u0d6f]/g, (d) => String((d.charCodeAt(0) & 0x7f) - 0x66));
 
 /** Typed text -> canonical value, or an error key. Never rounds, never guesses. */
 export function validate(field: FieldName, text: string): { value: string } | { error: string } {
@@ -185,6 +185,16 @@ export function toInput(field: FieldName, value: string): string {
 
 // ------------------------------------------------------------------------------------------ facts revision
 
+/** True when a real (not demo) case holds anything a person would lose if it were replaced. */
+export function hasDraft(c: CaseState): boolean {
+  return (
+    c.origin === "personal" &&
+    (c.images.length > 0 ||
+      c.txs.some((t) => FIELD_ORDER.some((f) => t.fields[f].state !== "empty")) ||
+      Object.values(c.info).some((v) => v.trim() !== ""))
+  );
+}
+
 /** Signature of everything that can appear in a report. factsRev moves only when this changes. */
 function factsSignature(c: CaseState): string {
   return JSON.stringify([
@@ -215,7 +225,7 @@ export type Action =
   | { type: "loadSeed"; clock: string; images: SeedImage[] }
   | { type: "addTx" }
   | { type: "removeTx"; txId: string }
-  | { type: "addImage"; image: Omit<ImageRec, "consent" | "state" | "attemptId" | "candidates" | "extraction" | "meta" | "error"> }
+  | { type: "addImage"; image: Omit<ImageRec, "consent" | "state" | "attemptId" | "poolAttemptId" | "candidates" | "extraction" | "meta" | "error"> }
   | { type: "consent"; imageId: string; value: boolean }
   | { type: "removeImage"; imageId: string }
   | { type: "sending"; generation: number; imageId: string; attemptId: string }
@@ -246,6 +256,7 @@ function updateImage(c: CaseState, imageId: string, fn: (i: ImageRec) => ImageRe
 /** Removing evidence withdraws every field that depended on it; independently typed facts survive. */
 function dropSource(t: Transaction, imageId: string): Transaction {
   const fields = { ...t.fields };
+  // A corrected value, or one being edited from a reading, still depends on that screenshot (spec §4, R3-A02).
   for (const f of FIELD_ORDER) {
     const v = fields[f];
     if ("source" in v && v.source?.imageId === imageId) fields[f] = { state: "empty" };
@@ -302,7 +313,7 @@ function reduceInner(c: CaseState, a: Action): CaseState {
       if (c.images.length >= LIMITS.images) return c;
       return {
         ...c,
-        images: [...c.images, { ...a.image, consent: false, state: "ready", attemptId: null, candidates: [], extraction: null, meta: null, error: null }],
+        images: [...c.images, { ...a.image, consent: false, state: "ready", attemptId: null, poolAttemptId: null, candidates: [], extraction: null, meta: null, error: null }],
       };
     case "consent":
       return updateImage(c, a.imageId, (i) => (i.state === "sending" ? i : { ...i, consent: a.value }));
@@ -314,27 +325,33 @@ function reduceInner(c: CaseState, a: Action): CaseState {
     case "sending": {
       const img = c.images.find((i) => i.id === a.imageId);
       if (a.generation !== c.generation || !img || !img.consent || img.state === "sending") return c;
-      // A new attempt replaces this image's candidate pool: facts that depended on the old pool are withdrawn.
-      const txs = img.attemptId ? c.txs.map((t) => ({ ...dropSource(t, img.id), imageIds: t.imageIds })) : c.txs;
-      return {
-        ...updateImage(c, img.id, (i) => ({ ...i, state: "sending", attemptId: a.attemptId, error: null, candidates: [], meta: null })),
-        txs,
-      };
+      // Starting an attempt changes no facts: the last reading stays until a new one actually replaces it.
+      return updateImage(c, img.id, (i) => ({ ...i, state: "sending", attemptId: a.attemptId, error: null }));
     }
     case "ocrResult": {
       const img = c.images.find((i) => i.id === a.imageId);
       // Ownership check: same case generation, same image, same attempt, still waiting. Otherwise drop it.
       if (a.generation !== c.generation || !img || img.state !== "sending" || img.attemptId !== a.attemptId) return c;
+      // consent: false, because another paid attempt needs a new, explicit tick.
+      if (!a.candidates.length) {
+        // An empty reading replaces nothing: an earlier pool keeps its own timings and provenance.
+        const first = !img.candidates.length;
+        return updateImage(c, img.id, (i) => ({
+          ...i, state: "no-fields", consent: false, ...(first ? { meta: a.meta, extraction: a.extraction } : {}),
+        }));
+      }
       const done: ImageRec = {
         ...img,
-        state: a.candidates.length ? "reviewable" : "no-fields",
+        state: "reviewable",
         candidates: a.candidates,
+        poolAttemptId: a.attemptId,
         meta: a.meta,
         extraction: a.extraction,
-        consent: false, // another paid attempt needs a new, explicit tick
+        consent: false,
       };
-      const c2 = updateImage(c, img.id, () => done);
-      return a.candidates.length ? applyResult(c2, done, a.candidates, a.attemptId) : c2;
+      // The candidate pool is replaced now, so facts that depended on the old pool are withdrawn.
+      const txs = c.txs.map((t) => ({ ...dropSource(t, img.id), imageIds: t.imageIds }));
+      return applyResult(updateImage({ ...c, txs }, img.id, () => done), done, a.candidates, a.attemptId);
     }
     case "ocrFailed":
       if (a.generation !== c.generation) return c;
@@ -345,7 +362,7 @@ function reduceInner(c: CaseState, a: Action): CaseState {
       return { ...c, images: c.images.map((i) => (i.state === "sending" ? { ...i, state: "unavailable", consent: false, error: "LEFT" } : i)) };
     case "propose": {
       const img = c.images.find((i) => i.id === a.imageId);
-      const attemptId = img?.attemptId;
+      const attemptId = img?.poolAttemptId;
       if (!img || !attemptId) return c;
       // A candidate supports at most one field at a time: take it away from wherever it was used.
       const cleared = {
@@ -474,6 +491,10 @@ export function facts(c: CaseState): Facts {
 }
 
 export const isCompletedOutgoing = (t: FactsTx) => t.direction === "outgoing" && t.paymentStatus === "completed";
+
+/** A payment that may have left the account and carries a confirmed detail a bank could trace. */
+export const canBeHeld = (t: FactsTx) =>
+  t.direction === "outgoing" && t.paymentStatus !== "failed" && t.paymentStatus !== "reversed" && !!(t.upiRef || t.bankRef || t.receiverVpa);
 
 export function unresolvedCount(c: CaseState): number {
   return c.txs.reduce((n, t) => n + FIELD_ORDER.filter((f) => t.fields[f].state === "proposed" || t.fields[f].state === "editing").length, 0);
