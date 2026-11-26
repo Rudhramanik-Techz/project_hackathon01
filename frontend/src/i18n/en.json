@@ -59,6 +59,7 @@
   "img_sending": "Sending image…",
   "img_reviewable": "Read. Check each field below against the screenshot.",
   "img_no-fields": "No payment details found. Please type them.",
+  "img_reread_empty": "This read found nothing new. The earlier reading is kept below.",
   "img_unavailable": "Not read. You can type the details.",
   "imgErr_tooBig": "This file is too large. Crop it or take a smaller screenshot.",
   "imgErr_type": "Use a JPG or PNG screenshot.",

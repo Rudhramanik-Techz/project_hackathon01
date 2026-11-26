@@ -24,6 +24,8 @@ interface ScriptText {
   count: (n: number) => string;
   payment: (i: number, p: PaymentParts) => string;
   unsure: string;
+  /** A confirmed failed, reversed or pending status, said plainly instead of "not sure". */
+  status: Partial<Record<"failed" | "reversed" | "pending", string>>;
   suspects: (list: string) => string;
   ack: (n: string) => string;
   close: string;
@@ -50,6 +52,11 @@ const TEXT: Record<"en" | "hi" | "ta", ScriptText> = {
       );
     },
     unsure: "I am not sure this payment went through.",
+    status: {
+      failed: "My app shows this payment as failed.",
+      reversed: "My app shows this payment as reversed.",
+      pending: "My app shows this payment as pending.",
+    },
     suspects: (list) => `The suspected fraudster contacted me from: ${list}.`,
     ack: (n) => `My earlier acknowledgement number is ${n}.`,
     close: "Please register my complaint and send me the acknowledgement number.",
@@ -72,6 +79,11 @@ const TEXT: Record<"en" | "hi" | "ta", ScriptText> = {
       );
     },
     unsure: "मुझे पक्का नहीं पता कि यह पेमेंट पूरा हुआ या नहीं।",
+    status: {
+      failed: "मेरे ऐप में यह पेमेंट फेल दिख रहा है।",
+      reversed: "मेरे ऐप में यह पेमेंट वापस (रिवर्स) हुआ दिख रहा है।",
+      pending: "मेरे ऐप में यह पेमेंट पेंडिंग दिख रहा है।",
+    },
     suspects: (list) => `संदिग्ध ठग ने इन नंबरों से संपर्क किया: ${list}।`,
     ack: (n) => `मेरा पिछला एक्नॉलेजमेंट नंबर ${n} है।`,
     close: "कृपया मेरी शिकायत दर्ज करें और मुझे एक्नॉलेजमेंट नंबर भेजें।",
@@ -94,6 +106,11 @@ const TEXT: Record<"en" | "hi" | "ta", ScriptText> = {
       );
     },
     unsure: "இந்தப் பணம் உண்மையில் போனதா என்று எனக்கு உறுதியாகத் தெரியவில்லை.",
+    status: {
+      failed: "என் செயலியில் இந்தப் பணப்பரிமாற்றம் தோல்வியடைந்ததாகக் காட்டுகிறது.",
+      reversed: "என் செயலியில் இந்தப் பணம் திரும்ப வந்ததாகக் காட்டுகிறது.",
+      pending: "என் செயலியில் இந்தப் பணப்பரிமாற்றம் நிலுவையில் உள்ளதாகக் காட்டுகிறது.",
+    },
     suspects: (list) => `சந்தேகிக்கப்படும் மோசடியாளர் இந்த எண்களிலிருந்து தொடர்புகொண்டார்: ${list}.`,
     ack: (n) => `என் முந்தைய ஒப்புகை எண் ${n}.`,
     close: "தயவுசெய்து என் புகாரைப் பதிவு செய்து, ஒப்புகை எண்ணை அனுப்புங்கள்.",
@@ -123,6 +140,7 @@ function fromTable(lang: Lang): ScriptText {
       );
     },
     unsure: k("unsure"),
+    status: { failed: k("failed") || undefined, reversed: k("reversed") || undefined, pending: k("pending") || undefined },
     suspects: (v) => fill("suspects", v),
     ack: (v) => fill("ack", v),
     close: k("close"),
@@ -151,7 +169,9 @@ export function build1930Script(f: Facts, lang: Lang, suspects: string[]): strin
       direction: tx.direction,
     });
     const settled = tx.direction === "incoming" ? tx.paymentStatus === "completed" : isCompletedOutgoing(tx);
-    if (!settled) line += ` ${t.unsure}`;
+    const said = t.status[tx.paymentStatus as "failed" | "reversed" | "pending"];
+    if (said) line += ` ${said}`;
+    else if (!settled) line += ` ${t.unsure}`;
     lines.push(line);
   });
   if (suspects.length) lines.push(t.suspects(suspects.join(", ")));

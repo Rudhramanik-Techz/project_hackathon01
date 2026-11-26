@@ -223,3 +223,28 @@ def test_a_warning_never_lowers_the_score_of_a_threat(text):
 def test_hindi_masculine_electricity_threat_is_flagged():
     v = verdict("बिजली कनेक्शन आज रात कट जाएगा, अधिकारी से संपर्क करें")
     assert v.family == "electricity" and v.score > 15, v
+
+
+# Advisory wording from the production checklist (27 Nov): common real advisories must not be flagged.
+@pytest.mark.parametrize("text", [
+    "सावधान! पुलिस कभी वीडियो कॉल पर गिरफ्तार नहीं करती। ऐसे कॉल आने पर 1930 पर कॉल करें।",
+    "CBI officers do not arrest people over video calls.",
+    "There is no such thing as digital arrest.",
+    "Beware of digital arrest scams. Police never arrest anyone on a video call.",
+    "Beware of digital arrest frauds. Do not transfer money to anyone claiming to be CBI.",
+    "Digital arrest is a fraud. Police never arrest anyone on a video call.",
+    "No government agency asks you to transfer money to a safe account.",
+    "போலீஸ் வீடியோ அழைப்பில் கைது செய்ய மாட்டார்கள்."
+])
+def test_more_real_advisories_are_not_flagged(text):
+    assert verdict(text).tier == "no_known_pattern", verdict(text)
+
+
+@pytest.mark.parametrize("text", [
+    "Beware of digital arrest scams. CBI arrest warrant issued, stay on the video call and transfer your savings to the RBI verification account.",
+    "Beware of digital arrest scams, stay on the video call, arrest warrant issued",
+    "No government agency asks you to do this except us: transfer money to the RBI verification account, arrest warrant issued, stay on the video call.",
+    "போலீஸ் கைது வாரண்ட் உள்ளது வீடியோ அழைப்பில் இருங்கள் இல்லையெனில் விட மாட்டார்கள்."
+])
+def test_new_advisory_patterns_cannot_hide_a_threat(text):
+    assert verdict(text).tier == "likely_scam", verdict(text)

@@ -118,6 +118,11 @@ test("a re-read keeps confirmed facts unless it actually returns a new reading",
     assert.equal(facts(s).txs[0]!.upiRef, "012345678901");
     assert.equal(s.images[0]!.candidates.length, A.length);
   }
+  // An empty re-read must not say "no payment details found" while the earlier reading is still shown.
+  assert.equal(empty.images[0]!.state, "reviewable");
+  assert.equal(empty.images[0]!.error, "EMPTY_REREAD");
+  const firstEmpty = read(withImage(newCase("personal", 0), "imgB"), "imgB", "k1", []);
+  assert.equal(firstEmpty.images[0]!.state, "no-fields");
   // The surviving pool can still be used, and still says which attempt produced it.
   const reused = run(failed, { type: "propose", txId: id, field: "upiRef", candidate: A[2]!, imageId: "imgA" });
   const f = reused.txs[0]!.fields.upiRef;
@@ -261,4 +266,22 @@ test("a payment whose direction is not confirmed is never listed as the suspect'
 test("the script does not count a payment row with nothing in it", () => {
   const f = facts(run(newCase("personal", 0), { type: "addTx" }));
   assert.doesNotMatch(build1930Script(f, "en", []), /1 payment|Payment 1/);
+});
+
+test("a payment confirmed as failed or reversed is said so, not 'not sure it went through'", () => {
+  for (const status of ["failed", "reversed", "pending"] as const) {
+    const f = facts(typed({ amountPaise: "500", upiRef: "012345678901", direction: "outgoing", paymentStatus: status }));
+    for (const lang of ["en", "hi", "ta", "bn", "mr", "te", "kn", "ml"] as const) {
+      const script = build1930Script(f, lang, []);
+      assert.doesNotMatch(script, /not sure|पक्का नहीं|உறுதியாகத்|নিশ্চিত নই|खात्री नाही|ఖచ్చితంగా తెలియదు|ಖಚಿತವಿಲ್ಲ|ഉറപ്പില്ല/, `${lang} ${status}`);
+    }
+    assert.match(build1930Script(f, "en", []), new RegExp(`shows this payment as ${status}`));
+    assert.match(buildDescription(f, [], []), new RegExp(`payment shown as ${status}`));
+    assert.doesNotMatch(buildDescription(f, [], []), /status not confirmed/);
+    assert.match(buildBankEmail(f).body, new RegExp(`payment shown as ${status}`));
+  }
+  // An unconfirmed status still says so.
+  const unknown = facts(typed({ amountPaise: "500", direction: "outgoing" }));
+  assert.match(build1930Script(unknown, "en", []), /not sure this payment went through/);
+  assert.match(buildDescription(unknown, [], []), /status not confirmed/);
 });

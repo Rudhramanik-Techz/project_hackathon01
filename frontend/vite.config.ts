@@ -10,7 +10,9 @@ export default defineConfig({
     react(),
     tailwindcss(),
     VitePWA({
-      registerType: "autoUpdate",
+      // "prompt": a new version waits until every tab is closed, so it never swaps the app under an open case
+      // (the case lives only in memory). There is no prompt UI; the update applies on the next fresh open.
+      registerType: "prompt",
       injectRegister: "auto",
       includeAssets: ["icon.svg", "favicon.svg", "samples/*.jpg", "audio/**/*.mp3", "eval-report.md"],
       manifest: {

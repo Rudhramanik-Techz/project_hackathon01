@@ -1,5 +1,5 @@
 // Plain bank dispute draft in English. No recipient is inferred: the family chooses the bank's address.
-import { canBeHeld, type Facts, isCompletedOutgoing } from "../case/model";
+import { canBeHeld, type Facts, paymentNote } from "../case/model";
 import { formatIst, formatPaise } from "../lib/format";
 
 export interface BankEmail {
@@ -24,7 +24,7 @@ export function buildBankEmail(f: Facts): BankEmail {
       t.receiverVpa ? `${incoming ? "received at" : t.direction === "outgoing" ? "to" : "receiving"} UPI ID ${t.receiverVpa}` : "",
     ].filter(Boolean);
     if (!details.length) return [];
-    return [[...details, incoming ? "(money received)" : isCompletedOutgoing(t) ? "" : "(status not confirmed)"].filter(Boolean).join(" ")];
+    return [[...details, paymentNote(t)].filter(Boolean).join(" ")];
   }).map((row, i) => `${i + 1}. ${row}`);
   const body = [
     "Dear Sir/Madam,",

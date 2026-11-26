@@ -1,6 +1,6 @@
 # Asli Ya Nakli: what is left before production
 
-Written 27 Nov 2026 for branch `sujith-updates`. **Current state: working prototype, not production ready.**
+Written 27 Nov 2026 for branch `sujith-updates`; P0 code fixes updated later on 27 Nov. **Current state: working prototype, not production ready.**
 
 Round 1 deadline: **30 Nov 2026, 11:59 PM IST**, with student verification recommended by **27 Nov** (from the 26 Nov reading of the Techfest rules; confirm on the official site).
 
@@ -25,21 +25,29 @@ npm run dev
 | Check | State |
 |---|---|
 | TypeScript check | Passed |
-| Frontend tests | 27 passed |
-| Python tests | 173 passed; `test_llm.py` and `test_ledger.py` not run on the latest code |
+| Frontend tests | 29 passed |
+| Python tests | 223 passed (all files, including `test_llm.py`, `test_ledger.py` and TS/Python parity) |
 | Browser tests (desktop, phone, tablet sizes) | Passed with a mocked server, bundled with esbuild |
-| `vite build`, `npm run dev` | **Not yet run on the redesign** |
+| `vite build`, `npm run dev` | Both work locally (27 Nov). Main bundle is 806 KB raw / 224 KB gzip |
 | Real phones, deployed AWS | **Not tested** |
 | Live URL | Still runs the old version |
 
 ## P0: before any demo
 
-- [ ] `npm run build` and `npm run dev` work. After pushing, the GitHub Actions run is green.
+- [x] `npm run build` and `npm run dev` work locally.
+- [ ] After pushing, the GitHub Actions run is green.
 - [ ] Click through every page on a laptop and a real phone.
-- [ ] **Hindi false alarm.** Some genuine advisories score "likely scam", for example one beginning "सावधान! पुलिस कभी वीडियो कॉल पर गिरफ्तार नहीं करती…". Also re-test these English ones: "CBI officers do not arrest people over video calls…", "There is no such thing as digital arrest…". Change `backend/common/rules.py` and `frontend/src/lib/checker.ts` together, and add cases to `tests/parity_cases.json`.
-- [ ] **Empty re-read.** A screenshot read again with no result says "no fields" while old readings remain (`frontend/src/case/model.ts`).
-- [ ] **Failed payments** are worded "not sure it went through" in the report (`frontend/src/pack/`).
-- [ ] **Marathi detection** is a short word list (`frontend/src/lib/readable.ts`). A Marathi message it misses can show "no known scam pattern". Widen it and test with real examples.
+- [x] **Hindi false alarm.** The named Hindi and English advisories score 0. Also fixed: "Beware of digital arrest scams.", "Digital arrest is a fraud.", "No government agency asks you to transfer money…" and Tamil "போலீஸ் … கைது செய்ய மாட்டார்கள்." without ஒருபோதும். Both engines changed; cases added to `tests/parity_cases.json` and `tests/test_rules.py`, including threats that must stay flagged.
+  - Still flagged on purpose, because the threat-word guard keeps the sentence: "Real police will never ask you to stay on a video call" (65), Hindi advisories containing "ट्रांसफर" (35), "Electricity board never sends SMS asking you to call an officer…" (60). Collect real advisories before loosening that guard.
+- [x] **Empty re-read.** An empty re-read keeps the image reviewable and says "This read found nothing new. The earlier reading is kept below." (new key `img_reread_empty` in all 8 languages; non-English wording needs native review).
+- [x] **Failed payments.** A confirmed failed, reversed or pending status is now said plainly in the call script (all 8 languages), the NCRP text and the bank draft ("payment shown as failed"). Only an unconfirmed status says "not sure". New `sc.failed/reversed/pending` keys need native review.
+- [x] **Marathi detection** widened to about 45 Marathi-only words (verb endings, pronouns, postpositions). Catches 10 of 10 sample scams and has 0 false positives over 455 Hindi strings (all of `hi.json`, the Hindi test cases and sample scams). Still a word list: re-test with real Marathi messages.
+
+### Also fixed from the 26 Nov audit PDF
+- Already fixed before 27 Nov (checked in code and tests): demo sample asks before replacing a real case; a failed re-read keeps confirmed fields; empty case says "suspected" and asks for no hold; incoming payments are not "Sent to"; unknown details are left unsaid; Hindi and Tamil digits are hidden.
+- [x] Safe app updates: the service worker now uses `registerType: "prompt"`, so a new version waits until every tab is closed instead of replacing the app under an open case. There is no "update available" prompt yet.
+- [x] Rollback safety: `deploy.sh` no longer uses `s3 sync --delete`, so the previous build's hashed files stay in the bucket.
+- Note: a **successful** re-read still withdraws fields confirmed from the earlier reading. That is deliberate (spec §4, R3-A02; tested in `model.test.ts`).
 
 ## P1: before submitting
 

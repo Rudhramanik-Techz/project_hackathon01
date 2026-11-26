@@ -1,7 +1,7 @@
 // Copy fields for cybercrime.gov.in > Report Financial Fraud, in English (the portal's language).
 // Only confirmed values; unknowns are left out, never copied as placeholders. No computed loss total.
 // VERIFY the portal's current field names and order before Demo Day.
-import { canBeHeld, type Facts, isCompletedOutgoing } from "../case/model";
+import { canBeHeld, type Facts, paymentNote } from "../case/model";
 import { formatIst, formatPaise } from "../lib/format";
 
 export interface NcrpField {
@@ -26,7 +26,7 @@ export function buildDescription(f: Facts, suspects: string[], links: string[]):
       ref,
     ].filter(Boolean);
     if (!details.length) return "";
-    const note = incoming ? "(money received)" : isCompletedOutgoing(t) ? "" : "(status not confirmed)";
+    const note = paymentNote(t);
     return [`Payment ${i + 1}`, ...details, note].filter(Boolean).join(" ") + ".";
   });
   const parts = [

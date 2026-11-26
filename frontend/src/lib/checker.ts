@@ -85,13 +85,15 @@ const PROTECTIVE: RegExp[] = [
   /^(please )?(do not|dont|never) (share|disclose|reveal|give|send|transfer|pay|click)\b[^,;:]{0,40}\b(otp|pin|cvv|password|money|links?|card details|bank details|account details)\b[^,;:]{0,30}$/u,
   /(otp|pin|cvv|ओटीपी|पिन|पासवर्ड)[^,;:]{0,40}(साझा (न|ना|नहीं) करें|शेयर (न|ना|नहीं) करें|(न|ना|मत) बता)[^,;:]{0,12}$/u,
   /(पुलिस|सीबीआई|बैंक|आरबीआई)[^,;:]{0,60}(कभी|वीडियो कॉल पर)[^,;:]{0,60}नहीं (करती|करता|करते|मांगती|मांगता|मांगते|माँगती|माँगता|माँगते)[^,;:]{0,15}$/u,
+  /^(no|none of the) (real |genuine )?(government|govt|police|cbi|bank|banks|rbi|agency|agencies|officials?|officers?)( agency| agencies| department| officers?| officials?)? (ever |will ever |will )?(asks?|demands?|tells?|calls?)\b[^,;:—]{0,60}$/u,
   /(otp|pin|cvv|ஓடிபி)[^,;:]{0,40}(பகிர வேண்டாம்|பகிராதீர்கள்|சொல்ல வேண்டாம்)[^,;:]{0,12}$/u,
-  /(காவல்துறை|போலீஸ்|வங்கி|சிபிஐ)[^,;:]{0,60}ஒருபோதும்[^,;:]{0,60}(மாட்டார்கள்|மாட்டாது)[^,;:]{0,15}$/u,
+  /(காவல்துறை|போலீஸ்|வங்கி|சிபிஐ)[^,;:]{0,120}(மாட்டார்கள்|மாட்டாது)[^,;:]{0,15}$/u,
 ];
 // Standard advisories, matched as complete sentences with no room for anything else.
 const SAFE_SENTENCES: RegExp[] = [
   /^([a-z0-9 ]{0,30}\b(advisory|warns?|warning|alert|reminder|fraud|remember) ?: ?)?(the )?(police|cbi|ed|rbi|government|govt|law enforcement)( and (the )?(police|cbi|ed))?( officers?| officials?| agencies)? (never|do not|does not|dont|doesnt|will not|wont|cannot|cant|will never|can never) arrests? ((anyone|people|citizens|you) )?(over|on|through|via|by) (a )?(video|phone|audio|whatsapp|skype)( or (video|phone))? ?calls?[.!]*$/u,
-  /^([a-z0-9 ]{0,30}\b(advisory|warns?|warning|alert|reminder|fraud|remember) ?: ?)?(there is no such thing as (a )?digital arrest|there is no digital arrest|digital arrest (is not real|does not exist|is fake|is a scam))( in (india|law|indian law))?[.!]*$/u,
+  /^([a-z0-9 ]{0,30}\b(advisory|warns?|warning|alert|reminder|fraud|remember) ?: ?)?(there is no such thing as (a )?digital arrest|there is no digital arrest|digital arrest (is not real|does not exist|is (a )?(fake|scam|fraud|hoax|myth)))( in (india|law|indian law))?[.!]*$/u,
+  /^(beware|be aware|be careful|be alert|stay alert|stay safe|watch out)( of| from| against| for)? (the )?(fake )?digital arrest( calls?| scams?| frauds?| cases?)*[.!]*$/u,
   /^(please )?(report (such|these|this|suspicious|fraud)( calls?| messages?)? (to|on|at)|call|dial) 1930( or (visit )?(www\.)?cybercrime\.gov\.in)?( immediately| at once| now| right away)?[.!]*$/u,
 ];
 // Anything that turns a warning back into an instruction keeps the whole sentence.

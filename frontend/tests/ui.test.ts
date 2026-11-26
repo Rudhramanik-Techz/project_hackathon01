@@ -50,6 +50,24 @@ test("messages the rules cannot read are recognised", () => {
   for (const m of ["Your parcel is held", "आपका पार्सल रोका गया है", "உங்கள் பார்சல்"]) assert.equal(cannotCheck(m), false, m);
 });
 
+test("short Marathi messages are recognised; common Hindi scam wording is not mistaken for Marathi", () => {
+  for (const m of [
+    "पार्सल अडकले. पैसे पाठवा.",
+    "माझा मोबाईल हरवला, या नंबरवर पैसे पाठव",
+    "वीज बिल भरले नाही तर वीजपुरवठा खंडित होईल",
+    "आपले खाते बंद होणार आहे",
+    "मी सीबीआय मधून बोलत आहे. व्हिडिओ कॉलवर राहा, कोणालाही सांगू नका.",
+  ]) assert.equal(cannotCheck(m), true, m);
+  for (const m of [
+    "आपकी बिजली आज रात काट दी जाएगी",
+    "आज रात्रि 9 बजे बिजली कटेगी",
+    "पापा मेरा एक्सीडेंट हो गया है, जल्दी पैसे भेजो",
+    "आपका खाता बंद हो जाएगा, तुरंत KYC करें",
+    "मुझे अभी पैसे चाहिए, किसी को मत बताना",
+    "सावधान! पुलिस कभी वीडियो कॉल पर गिरफ्तार नहीं करती।",
+  ]) assert.equal(cannotCheck(m), false, m);
+});
+
 test("link check reads only the address text", () => {
   assert.equal(inspectLink("hello there"), null);
   assert.equal(inspectLink("javascript://x.com"), null);

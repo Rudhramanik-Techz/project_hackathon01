@@ -405,7 +405,15 @@ function Uploads({ c, dispatch, onRead }: { c: CaseState; dispatch: Dispatch<Act
               <div>
                 <p><b>{img.name}</b></p>
                 <p className="muted">{img.width}×{img.height} · {Math.round(img.blob.size / 1024)} KB JPEG</p>
-                <p aria-live="polite">{img.state === "ready" ? "" : img.state === "unavailable" ? errText(img.error) : t(`img_${img.state}` as StringKey)}</p>
+                <p aria-live="polite">
+                  {img.state === "ready"
+                    ? ""
+                    : img.state === "unavailable"
+                      ? errText(img.error)
+                      : img.error === "EMPTY_REREAD"
+                        ? t("img_reread_empty")
+                        : t(`img_${img.state}` as StringKey)}
+                </p>
               </div>
             </div>
             {img.state !== "sending" && (

@@ -334,11 +334,15 @@ function reduceInner(c: CaseState, a: Action): CaseState {
       if (a.generation !== c.generation || !img || img.state !== "sending" || img.attemptId !== a.attemptId) return c;
       // consent: false, because another paid attempt needs a new, explicit tick.
       if (!a.candidates.length) {
-        // An empty reading replaces nothing: an earlier pool keeps its own timings and provenance.
+        // An empty reading replaces nothing: an earlier pool keeps its own timings and provenance. When an
+        // earlier reading is still shown, the image stays reviewable and says this read found nothing new,
+        // instead of claiming no details were found.
         const first = !img.candidates.length;
-        return updateImage(c, img.id, (i) => ({
-          ...i, state: "no-fields", consent: false, ...(first ? { meta: a.meta, extraction: a.extraction } : {}),
-        }));
+        return updateImage(c, img.id, (i) =>
+          first
+            ? { ...i, state: "no-fields", consent: false, meta: a.meta, extraction: a.extraction }
+            : { ...i, state: "reviewable", consent: false, error: "EMPTY_REREAD" },
+        );
       }
       const done: ImageRec = {
         ...img,
@@ -491,6 +495,18 @@ export function facts(c: CaseState): Facts {
 }
 
 export const isCompletedOutgoing = (t: FactsTx) => t.direction === "outgoing" && t.paymentStatus === "completed";
+
+/** English note for a payment line in the NCRP text and bank draft: a confirmed status is said plainly. */
+export function paymentNote(t: FactsTx): string {
+  const status =
+    t.paymentStatus === "failed" ? "payment shown as failed"
+    : t.paymentStatus === "reversed" ? "payment shown as reversed"
+    : t.paymentStatus === "pending" ? "payment shown as pending"
+    : "";
+  if (t.direction === "incoming") return status ? `(money received; ${status})` : "(money received)";
+  if (status) return `(${status})`;
+  return isCompletedOutgoing(t) ? "" : "(status not confirmed)";
+}
 
 /** A payment that may have left the account and carries a confirmed detail a bank could trace. */
 export const canBeHeld = (t: FactsTx) =>
