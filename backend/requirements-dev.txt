@@ -1,0 +1,9 @@
+# Dev only. Never packaged into Lambda.
+-r requirements.txt
+pydantic>=2.9,<3  # dev only now (FastAPI)
+boto3>=1.35
+pytest>=8
+fastapi>=0.115
+uvicorn>=0.32
+moto[dynamodb]>=5
+botocore[crt]

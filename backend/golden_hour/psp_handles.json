@@ -1,0 +1,13 @@
+{
+  "_comment": "Known UPI handles (the part after @). Not exhaustive; VERIFY against NPCI's list. Unknown handles are flagged, never rejected.",
+  "handles": [
+    "abfspay", "airtel", "apl", "aubank", "axisb", "axisbank", "axl", "barodampay", "boi", "centralbank",
+    "cnrb", "cub", "dbs", "dlb", "equitas", "fam", "fbl", "federal", "freecharge", "hdfcbank", "hsbc",
+    "ibl", "icici", "idbi", "idfcbank", "idfcfirst", "ikwik", "indianbank", "indus", "ippb", "jio",
+    "jsb", "jupiteraxis", "kbl", "kmbl", "kotak", "kvb", "mahb", "naviaxis", "nsdl", "okaxis",
+    "okbizaxis", "okhdfcbank", "okicici", "oksbi", "paytm", "payzapp", "pingpay", "pnb", "postbank",
+    "ptaxis", "pthdfc", "ptsbi", "ptyes", "rapl", "rbl", "sbi", "sc", "sib", "slice", "superyes",
+    "tjsb", "timecosmos", "uco", "unionbank", "united", "upi", "waaxis", "wahdfcbank", "waicici",
+    "wasbi", "yapl", "ybl", "yesbank", "yesbankltd", "yesg"
+  ]
+}

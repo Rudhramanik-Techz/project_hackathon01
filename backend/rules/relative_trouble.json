@@ -1,0 +1,40 @@
+[
+  {
+    "id": "REL-01", "family": "relative_trouble", "weight": 45,
+    "any": ["(son|daughter|beta|beti|husband|wife|brother|bhai|sister|grandson|granddaughter|nephew|bacha|baccha|child) .{0,40}(arrest|arrested|accident|hospital|custody|caught|in trouble|jail|lockup|police station)",
+            "(arrest|arrested|accident|hospital|custody|caught|jail) .{0,30}(son|daughter|beta|beti|husband|brother|grandson)",
+            "(i|main|mai) .{0,20}(met with an accident|had an accident|in hospital|got arrest|been arrest|caught by police|in police custody)",
+            "(बेटा|बेटी|बेटे|पति|भाई|पोता) .{0,30}(arrest|पकड़ा|पकड़ी|दुर्घटना|एक्सीडेंट|अस्पताल|हिरासत|जेल)",
+            "(மகன்|மகள்|கணவர்|சகோதரர்|பேரன்) .{0,30}(arrest|விபத்து|மருத்துவமனை|காவலில்|சிறை)"],
+    "reason": {
+      "en": "It says a family member is arrested, in an accident or in hospital and money is needed at once. Call that person on their usual number first.",
+      "hi": "कहा गया है कि परिवार का कोई सदस्य गिरफ्तार है, दुर्घटना में है या अस्पताल में है और तुरंत पैसे चाहिए। पहले उसी व्यक्ति को उसके पुराने नंबर पर कॉल करें।",
+      "ta": "குடும்ப உறுப்பினர் கைது செய்யப்பட்டார், விபத்தில் சிக்கினார் அல்லது மருத்துவமனையில் இருக்கிறார், உடனே பணம் வேண்டும் என்கிறது. முதலில் அவரின் வழக்கமான எண்ணில் அவரையே அழையுங்கள்."
+    },
+    "source": "TODO_SOURCE"
+  },
+  {
+    "id": "REL-02", "family": "relative_trouble", "weight": 30, "signal": "payment",
+    "any": ["(my |this is my )?new (number|phone|mobile)", "(old|purana) (number|phone) .{0,20}(lost|broken|not working|band|kho)",
+            "(send|bhej|bhejo|transfer) .{0,30}(urgent|urgently|immediately|right now|turant|jaldi)",
+            "(urgent|urgently|emergency) .{0,30}(send|bhej|need|chahiye) .{0,20}(money|paise|rupees|₹|\\d)",
+            "नया नंबर", "புதிய எண்"],
+    "reason": {
+      "en": "It asks for money urgently from a 'new number'. Scammers use this so you can't check with the real person.",
+      "hi": "किसी 'नए नंबर' से तुरंत पैसे माँगे गए हैं। ठग ऐसा इसलिए करते हैं ताकि आप असली व्यक्ति से जाँच न कर सकें।",
+      "ta": "ஒரு 'புதிய எண்ணிலிருந்து' அவசரமாகப் பணம் கேட்கிறது. உண்மையான நபரிடம் நீங்கள் சரிபார்க்காமல் இருக்கவே மோசடியாளர்கள் இப்படிச் செய்கிறார்கள்."
+    },
+    "source": "TODO_SOURCE"
+  },
+  {
+    "id": "REL-03", "family": "relative_trouble", "weight": 20,
+    "any": ["(cant|cannot|can not|unable to) (talk|speak|call)", "(phone|mobile) (is )?(broken|damaged|not working|kharab)",
+            "baat nahi kar (sakta|sakti)", "बात नहीं कर (सकता|सकती)", "பேச முடியாது"],
+    "reason": {
+      "en": "It says they can't talk or their phone is broken, so you can't hear their real voice or call back.",
+      "hi": "कहा गया है कि वे बात नहीं कर सकते या फोन खराब है, ताकि आप उनकी असली आवाज़ न सुन सकें या वापस कॉल न कर सकें।",
+      "ta": "பேச முடியாது அல்லது போன் பழுது என்று சொல்கிறது; இதனால் நீங்கள் உண்மையான குரலைக் கேட்கவோ திரும்ப அழைக்கவோ முடியாது."
+    },
+    "source": "TODO_SOURCE"
+  }
+]

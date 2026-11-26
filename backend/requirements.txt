@@ -1,0 +1,2 @@
+# Packaged into every Lambda. boto3 is provided by the Lambda runtime.
+# v3 needs no third-party runtime packages (no native binaries to cross-build for arm64).

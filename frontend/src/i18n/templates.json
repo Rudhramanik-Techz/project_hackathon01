@@ -1,0 +1,50 @@
+{
+  "en": {
+    "likely_scam": "This looks like a {family} scam. {reasons} Do not pay, do not share any OTP or PIN, and cut the call. If you already sent money, call 1930 now.",
+    "suspicious": "This has warning signs of a {family} scam. {reasons} Do not pay yet. Verify by calling the official number from the company's website or your passbook.",
+    "no_known_pattern": "No known scam pattern found. Verify via the official number.",
+    "family": {
+      "_unknown": "common",
+      "digital_arrest": "\"digital arrest\"",
+      "customs_courier": "fake courier or customs parcel",
+      "kyc_sim": "KYC or SIM-block",
+      "electricity": "electricity cut-off",
+      "task_job": "part-time task job",
+      "collect_qr": "\"receive money\" QR or collect request",
+      "investment": "investment or trading group",
+      "relative_trouble": "relative-in-trouble"
+    }
+  },
+  "hi": {
+    "likely_scam": "यह {family} ठगी जैसा लगता है। {reasons} पैसे न भेजें, कोई OTP या PIN न बताएं, और कॉल काट दें। अगर पैसे भेज चुके हैं, तो अभी 1930 पर कॉल करें।",
+    "suspicious": "इसमें {family} ठगी के चेतावनी संकेत हैं। {reasons} अभी भुगतान न करें। कंपनी की वेबसाइट या पासबुक पर दिए आधिकारिक नंबर पर कॉल करके जाँच करें।",
+    "no_known_pattern": "कोई ज्ञात ठगी पैटर्न नहीं मिला। आधिकारिक नंबर से जाँच करें।",
+    "family": {
+      "_unknown": "आम",
+      "digital_arrest": "\"डिजिटल अरेस्ट\"",
+      "customs_courier": "नकली कूरियर या कस्टम पार्सल",
+      "kyc_sim": "KYC या सिम बंद",
+      "electricity": "बिजली कटौती",
+      "task_job": "पार्ट-टाइम टास्क नौकरी",
+      "collect_qr": "\"पैसे पाने\" वाले QR या कलेक्ट रिक्वेस्ट",
+      "investment": "निवेश या ट्रेडिंग ग्रुप",
+      "relative_trouble": "रिश्तेदार मुसीबत में"
+    }
+  },
+  "ta": {
+    "likely_scam": "இது {family} மோசடி போல் தெரிகிறது. {reasons} பணம் அனுப்ப வேண்டாம், OTP அல்லது PIN-ஐ யாரிடமும் சொல்ல வேண்டாம், அழைப்பைத் துண்டியுங்கள். ஏற்கனவே பணம் அனுப்பியிருந்தால், உடனே 1930-ஐ அழைக்கவும்.",
+    "suspicious": "இதில் {family} மோசடியின் எச்சரிக்கை அறிகுறிகள் உள்ளன. {reasons} இப்போது பணம் செலுத்த வேண்டாம். நிறுவனத்தின் இணையதளம் அல்லது பாஸ்புக்கில் உள்ள அதிகாரப்பூர்வ எண்ணை அழைத்துச் சரிபாருங்கள்.",
+    "no_known_pattern": "அறியப்பட்ட மோசடி முறை எதுவும் கிடைக்கவில்லை. அதிகாரப்பூர்வ எண்ணில் சரிபாருங்கள்.",
+    "family": {
+      "_unknown": "பொதுவான",
+      "digital_arrest": "\"டிஜிட்டல் கைது\"",
+      "customs_courier": "போலி கூரியர் அல்லது சுங்கப் பார்சல்",
+      "kyc_sim": "KYC அல்லது சிம் முடக்கம்",
+      "electricity": "மின் இணைப்பு துண்டிப்பு",
+      "task_job": "பகுதிநேர டாஸ்க் வேலை",
+      "collect_qr": "\"பணம் பெற\" QR அல்லது கலெக்ட் கோரிக்கை",
+      "investment": "முதலீடு அல்லது டிரேடிங் குழு",
+      "relative_trouble": "உறவினர் ஆபத்தில் இருப்பதாகக் கூறும்"
+    }
+  }
+}

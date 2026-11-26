@@ -1,0 +1,339 @@
+{
+ "check": {
+  "digitalArrest": "This is Inspector Vijay Sharma, CBI cyber cell Mumbai. A parcel in your Aadhaar name with illegal drugs was seized. An arrest warrant has been issued against you in a money laundering case. Stay on this video call and do not tell anyone in your family. Transfer your savings to the RBI verification account immediately to prove your innocence.",
+  "courier": "FedEx Alert: Your parcel to Taiwan has been seized by customs. It contains 5 fake passports and MDMA. A case is registered against you. Press 1 to speak to our customs officer. Pay the clearance fee immediately to avoid arrest.",
+  "genuine": "For your records: your monthly statement is ready in the bank app. Please do not share your PIN with anyone."
+ },
+ "seeds": {
+  "A": {
+   "clock": "2026-11-25T12:00+05:30",
+   "images": [
+    {
+     "file": "/samples/seed_a.jpg",
+     "width": 720,
+     "height": 1280,
+     "candidates": [
+      {
+       "id": "c1",
+       "field": "amountPaise",
+       "raw": "₹1,000.50",
+       "value": "100050",
+       "label": "",
+       "confidenceBp": 9976,
+       "box": [
+        1052,
+        2574,
+        5726,
+        3075
+       ]
+      },
+      {
+       "id": "c2",
+       "field": "upiRef",
+       "raw": "012345678901",
+       "value": "012345678901",
+       "label": "UPI Ref",
+       "confidenceBp": 10000,
+       "box": [
+        931,
+        4794,
+        3695,
+        4993
+       ]
+      },
+      {
+       "id": "c3",
+       "field": "upiRef",
+       "raw": "812345678901",
+       "value": "812345678901",
+       "label": "Order ID",
+       "confidenceBp": 10000,
+       "box": [
+        928,
+        6232,
+        3696,
+        6429
+       ]
+      },
+      {
+       "id": "c4",
+       "field": "bankRef",
+       "raw": "DEMOA0001",
+       "value": "DEMOA0001",
+       "label": "Bank Ref",
+       "confidenceBp": 9968,
+       "box": [
+        945,
+        5513,
+        3354,
+        5706
+       ]
+      },
+      {
+       "id": "c5",
+       "field": "bankRef",
+       "raw": "812345678901",
+       "value": "812345678901",
+       "label": "Order ID",
+       "confidenceBp": 10000,
+       "box": [
+        928,
+        6232,
+        3696,
+        6429
+       ]
+      },
+      {
+       "id": "c6",
+       "field": "receiverVpa",
+       "raw": "demo.merchant@ybl",
+       "value": "demo.merchant@ybl",
+       "label": "DEMO MERCHANT",
+       "confidenceBp": 9976,
+       "box": [
+        917,
+        2086,
+        4597,
+        2319
+       ]
+      },
+      {
+       "id": "c7",
+       "field": "bankName",
+       "raw": "From: DEMO PAYER (State Bank of India)",
+       "value": "State Bank of India",
+       "label": "your bank?",
+       "confidenceBp": 9924,
+       "box": [
+        913,
+        6600,
+        7541,
+        6805
+       ]
+      },
+      {
+       "id": "c8",
+       "field": "occurredAt",
+       "raw": "25 Nov 2026, 11:19 am",
+       "value": "2026-11-25T11:19+05:30",
+       "label": "",
+       "confidenceBp": 9422,
+       "box": [
+        918,
+        3760,
+        5029,
+        3977
+       ]
+      },
+      {
+       "id": "c9",
+       "field": "direction",
+       "raw": "Paid to",
+       "value": "outgoing",
+       "label": "",
+       "confidenceBp": 9956,
+       "box": [
+        929,
+        1230,
+        2159,
+        1420
+       ]
+      },
+      {
+       "id": "c10",
+       "field": "paymentStatus",
+       "raw": "Completed",
+       "value": "completed",
+       "label": "",
+       "confidenceBp": 9996,
+       "box": [
+        916,
+        3382,
+        3177,
+        3636
+       ]
+      }
+     ],
+     "warnings": [
+      "multiple_refs"
+     ]
+    }
+   ]
+  },
+  "B": {
+   "clock": "2026-11-25T12:00+05:30",
+   "images": [
+    {
+     "file": "/samples/seed_b1.jpg",
+     "width": 720,
+     "height": 1280,
+     "candidates": [
+      {
+       "id": "c1",
+       "field": "amountPaise",
+       "raw": "₹500.00",
+       "value": "50000",
+       "label": "",
+       "confidenceBp": 9850,
+       "box": [
+        1077,
+        2577,
+        4844,
+        3023
+       ]
+      },
+      {
+       "id": "c2",
+       "field": "upiRef",
+       "raw": "000000000321",
+       "value": "000000000321",
+       "label": "UPI Ref",
+       "confidenceBp": 9980,
+       "box": [
+        921,
+        4794,
+        3697,
+        4990
+       ]
+      },
+      {
+       "id": "c3",
+       "field": "receiverVpa",
+       "raw": "demo.courier@axl",
+       "value": "demo.courier@axl",
+       "label": "DEMO COURIER DESK",
+       "confidenceBp": 9896,
+       "box": [
+        923,
+        2088,
+        4115,
+        2292
+       ]
+      },
+      {
+       "id": "c4",
+       "field": "occurredAt",
+       "raw": "25 Nov 2026, 11:25 am",
+       "value": "2026-11-25T11:25+05:30",
+       "label": "",
+       "confidenceBp": 9424,
+       "box": [
+        919,
+        3764,
+        5019,
+        3978
+       ]
+      },
+      {
+       "id": "c5",
+       "field": "direction",
+       "raw": "Paid to",
+       "value": "outgoing",
+       "label": "",
+       "confidenceBp": 9976,
+       "box": [
+        937,
+        1235,
+        2153,
+        1417
+       ]
+      },
+      {
+       "id": "c6",
+       "field": "paymentStatus",
+       "raw": "Completed",
+       "value": "completed",
+       "label": "",
+       "confidenceBp": 9996,
+       "box": [
+        920,
+        3382,
+        3177,
+        3633
+       ]
+      }
+     ],
+     "warnings": []
+    },
+    {
+     "file": "/samples/seed_b2.jpg",
+     "width": 720,
+     "height": 1280,
+     "candidates": [
+      {
+       "id": "c1",
+       "field": "amountPaise",
+       "raw": "₹500.00",
+       "value": "50000",
+       "label": "",
+       "confidenceBp": 9911,
+       "box": [
+        1075,
+        2580,
+        4842,
+        3026
+       ]
+      },
+      {
+       "id": "c2",
+       "field": "receiverVpa",
+       "raw": "demo.courier@axl",
+       "value": "demo.courier@axl",
+       "label": "DEMO COURIER DESK",
+       "confidenceBp": 9896,
+       "box": [
+        925,
+        2085,
+        4108,
+        2292
+       ]
+      },
+      {
+       "id": "c3",
+       "field": "occurredAt",
+       "raw": "25 Nov 2026, 11:28 am",
+       "value": "2026-11-25T11:28+05:30",
+       "label": "",
+       "confidenceBp": 9414,
+       "box": [
+        918,
+        3761,
+        5024,
+        3978
+       ]
+      },
+      {
+       "id": "c4",
+       "field": "direction",
+       "raw": "Paid to",
+       "value": "outgoing",
+       "label": "",
+       "confidenceBp": 9974,
+       "box": [
+        935,
+        1233,
+        2152,
+        1417
+       ]
+      },
+      {
+       "id": "c5",
+       "field": "paymentStatus",
+       "raw": "Completed",
+       "value": "completed",
+       "label": "",
+       "confidenceBp": 9996,
+       "box": [
+        918,
+        3381,
+        3177,
+        3630
+       ]
+      }
+     ],
+     "warnings": []
+    }
+   ]
+  }
+ }
+}

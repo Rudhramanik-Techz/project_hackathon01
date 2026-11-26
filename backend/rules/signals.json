@@ -1,0 +1,37 @@
+[
+  {
+    "id": "GEN-01", "family": "generic", "weight": 10, "signal": "urgency",
+    "any": ["urgent(ly)?", "immediately", "right now", "within \\d+ (hours?|hrs?|minutes?|mins?)",
+            "(last|final) (chance|warning|reminder|notice)", "today itself", "turant", "jaldi", "abhi ke abhi",
+            "तुरंत", "जल्दी", "உடனடியாக", "உடனே", "அவசரம்"],
+    "reason": {
+      "en": "It pushes you to act immediately. Scammers create panic so you don't stop to check.",
+      "hi": "आपको तुरंत कुछ करने के लिए दबाव डाला गया है। ठग घबराहट पैदा करते हैं ताकि आप जाँच न करें।",
+      "ta": "உடனே செயல்படும்படி அழுத்தம் கொடுக்கிறது. நீங்கள் சரிபார்க்காமல் இருக்க மோசடியாளர்கள் பதற்றத்தை உருவாக்குகிறார்கள்."
+    },
+    "source": "TODO_SOURCE"
+  },
+  {
+    "id": "GEN-02", "family": "generic", "weight": 10, "signal": "payment",
+    "any": ["(transfer|send|pay|deposit) .{0,20}(money|amount|rs|₹|rupees|inr|\\d)", "pay now", "(payment|pay) link",
+            "(paise|paisa) bhej", "भुगतान", "पैसे (भेज|जमा)", "பணம் (அனுப்ப|செலுத்த|கட்ட)", "செலுத்தவும்"],
+    "reason": {
+      "en": "It asks you to pay or transfer money.",
+      "hi": "आपसे पैसे भेजने या भुगतान करने को कहा गया है।",
+      "ta": "பணம் செலுத்த அல்லது அனுப்பச் சொல்கிறது."
+    },
+    "source": "TODO_SOURCE"
+  },
+  {
+    "id": "GEN-03", "family": "generic", "weight": 15, "signal": "secrecy",
+    "any": ["(dont|do not|never) (tell|inform) .{0,20}(anyone|anybody|family|police|bank|relatives|mom|dad|papa|mummy)",
+            "(keep|kept) (this |it )?(secret|confidential)", "(kisi|kisiko) (ko )?(mat|na) (batana|batao|bataye|bataiye)",
+            "किसी को (मत|न) (बताना|बताएं|बताइए|बताओ)", "யாரிடமும் (சொல்ல|கூற) (வேண்டாம்|கூடாது)", "ரகசியமாக"],
+    "reason": {
+      "en": "It tells you to keep this secret. Real officials and family never ask you to hide it.",
+      "hi": "इसे गुप्त रखने को कहा गया है। असली अफसर या परिवार कभी छिपाने को नहीं कहते।",
+      "ta": "இதை ரகசியமாக வைக்கச் சொல்கிறது. உண்மையான அதிகாரிகளோ குடும்பத்தினரோ மறைக்கச் சொல்ல மாட்டார்கள்."
+    },
+    "source": "TODO_SOURCE"
+  }
+]

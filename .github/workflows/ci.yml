@@ -1,0 +1,70 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements-dev.txt
+      - run: pip install -r backend/requirements-dev.txt
+      - name: Unit tests (mock OCR/LLM, in-memory store; no AWS)
+        run: python -m pytest
+      - name: Held-out set must not change after it is frozen
+        run: |
+          if [ -f eval/holdout/cases.jsonl ] && [ -f eval/holdout/SHA256 ]; then
+            echo "$(cat eval/holdout/SHA256)  eval/holdout/cases.jsonl" | sha256sum --check
+          else
+            echo "Held-out set or its hash not present yet; skipping."
+          fi
+      - name: Evaluation report (held-out + OCR fixtures)
+        run: python scripts/run_eval.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: eval-report
+          path: eval/report.md
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - name: Case-model tests (node:test)
+        run: npm test
+      - run: npm run build
+      - name: JS bundle under 300 KB gzipped
+        run: node ../scripts/check_bundle_size.mjs
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Browser checker == Python checker (parity)
+        working-directory: .
+        run: pip install pytest && python -m pytest tests/test_parity.py
+
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

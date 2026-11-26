@@ -1,0 +1,1 @@
+# No third-party packages. dist/ is copied in by scripts/deploy.sh before `sam build`.

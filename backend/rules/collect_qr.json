@@ -1,0 +1,38 @@
+[
+  {
+    "id": "QR-01", "family": "collect_qr", "weight": 50, "signal": "payment",
+    "any": ["scan .{0,30}(to )?(receive|get|credit|accept)",
+            "(enter|put|type|daalo|dalo|daal do) .{0,15}(upi )?pin .{0,30}(receive|get|credit|refund|paise milenge)",
+            "pin .{0,20}(to|for) (receive|get|credit)",
+            "(receive|get) (the )?(money|payment|amount|refund) .{0,30}(scan|enter (your )?(upi )?pin)",
+            "पैसे (पाने|लेने) के लिए .{0,20}(पिन|स्कैन)", "பணம் (பெற|வாங்க) .{0,30}(pin|ஸ்கேன்)"],
+    "reason": {
+      "en": "It asks you to scan a QR code or enter your UPI PIN to receive money. You never need a PIN to receive money; a PIN only sends it.",
+      "hi": "पैसे पाने के लिए QR स्कैन करने या UPI PIN डालने को कहा गया है। पैसे पाने के लिए PIN कभी नहीं चाहिए; PIN से सिर्फ पैसे जाते हैं।",
+      "ta": "பணம் பெற QR-ஐ ஸ்கேன் செய்யவோ UPI PIN-ஐ உள்ளிடவோ சொல்கிறது. பணம் பெற PIN ஒருபோதும் தேவையில்லை; PIN போட்டால் பணம் போகும்."
+    },
+    "source": "TODO_SOURCE"
+  },
+  {
+    "id": "QR-02", "family": "collect_qr", "weight": 35, "signal": "payment",
+    "any": ["collect request", "(payment|money|upi) request .{0,30}(accept|approve)",
+            "(accept|approve) (the |this |my )?(payment |money |upi )?request", "request (bheji|bheja|sent) .{0,20}(accept|approve)"],
+    "reason": {
+      "en": "It asks you to 'accept' a collect or payment request. Accepting a request sends your money out.",
+      "hi": "कलेक्ट या पेमेंट रिक्वेस्ट 'स्वीकार' करने को कहा गया है। रिक्वेस्ट स्वीकार करने पर आपके पैसे जाते हैं।",
+      "ta": "கலெக்ட் அல்லது பேமெண்ட் கோரிக்கையை 'ஏற்க'ச் சொல்கிறது. கோரிக்கையை ஏற்றால் உங்கள் பணம் போகும்."
+    },
+    "source": "TODO_SOURCE"
+  },
+  {
+    "id": "QR-03", "family": "collect_qr", "weight": 20,
+    "any": ["olx", "quikr", "marketplace", "army (officer|man|person|jawan)", "(cisf|crpf|bsf) (officer|jawan)",
+            "advance (payment|amount|token)", "फौजी", "आर्मी", "ராணுவ"],
+    "reason": {
+      "en": "It mentions an online sale or a buyer such as an 'army officer' paying in advance, common in OLX-style scams.",
+      "hi": "इसमें ऑनलाइन बिक्री या 'आर्मी अफसर' जैसे खरीदार की बात है जो पहले से पैसे देने का दावा करता है, जो OLX जैसी ठगी में आम है।",
+      "ta": "ஆன்லைன் விற்பனை அல்லது முன்பணம் தருவதாகச் சொல்லும் 'ராணுவ அதிகாரி' போன்ற வாங்குபவரைக் குறிப்பிடுகிறது; இது OLX வகை மோசடிகளில் சாதாரணம்."
+    },
+    "source": "TODO_SOURCE"
+  }
+]

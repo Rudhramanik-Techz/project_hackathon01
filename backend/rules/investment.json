@@ -1,0 +1,40 @@
+[
+  {
+    "id": "INV-01", "family": "investment", "weight": 40,
+    "any": ["guaranteed? (returns?|profits?|income)", "\\d+ ?(%|percent) .{0,15}(daily|weekly|monthly|per day|per week|per month|returns?|profits?)",
+            "(double|triple) (your )?(money|investment|amount)", "(paisa|paise|money) double",
+            "(risk free|no risk) (returns?|profits?|investment|trading)",
+            "पैसा डबल", "गारंटीड (रिटर्न|मुनाफा)", "இரட்டிப்பு", "உத்தரவாத(மான)? (லாபம்|வருமானம்)"],
+    "reason": {
+      "en": "It promises guaranteed or very high returns. No real investment can guarantee profit.",
+      "hi": "पक्का या बहुत ज़्यादा मुनाफ़ा देने का वादा है। कोई असली निवेश मुनाफ़े की गारंटी नहीं दे सकता।",
+      "ta": "உறுதியான அல்லது மிக அதிக லாபம் தருவதாக வாக்குறுதி அளிக்கிறது. எந்த உண்மையான முதலீடும் லாபத்துக்கு உத்தரவாதம் தர முடியாது."
+    },
+    "source": "TODO_SOURCE"
+  },
+  {
+    "id": "INV-02", "family": "investment", "weight": 25,
+    "any": ["(whatsapp|telegram) (group|channel)", "stock (market )?(tips|advice|guru|mentor)",
+            "(ipo|block trade|institutional) (allotment|account|quota)", "trading (app|platform|group|account|class|academy)",
+            "vip (group|membership|plan)", "(crypto|forex|bitcoin|usdt) (trading|investment|profit)",
+            "शेयर (टिप्स|बाजार ग्रुप)", "பங்கு (சந்தை )?(டிப்ஸ்|குழு)"],
+    "reason": {
+      "en": "It invites you to a WhatsApp or Telegram 'stock tips' or trading group, where most investment scams begin.",
+      "hi": "आपको WhatsApp या Telegram के 'स्टॉक टिप्स' या ट्रेडिंग ग्रुप में बुलाया गया है, जहाँ से ज़्यादातर निवेश ठगी शुरू होती है।",
+      "ta": "WhatsApp அல்லது Telegram 'ஸ்டாக் டிப்ஸ்' அல்லது டிரேடிங் குழுவுக்கு அழைக்கிறது; பெரும்பாலான முதலீட்டு மோசடிகள் இங்கிருந்துதான் தொடங்கும்."
+    },
+    "source": "TODO_SOURCE"
+  },
+  {
+    "id": "INV-03", "family": "investment", "weight": 30, "signal": "payment",
+    "any": ["(tax|fee|charge|charges|deposit|margin) .{0,20}(before|to|for) (withdraw|withdrawal|release)",
+            "withdraw(al)? .{0,20}(blocked|pending|frozen|on hold|failed)", "(unfreeze|unlock) (your )?(account|funds|profit)",
+            "निकासी .{0,15}(फीस|टैक्स)"],
+    "reason": {
+      "en": "It asks for a tax, fee or extra deposit before you can withdraw your 'profit'. Your money is already gone; paying more won't release it.",
+      "hi": "अपना 'मुनाफ़ा' निकालने से पहले टैक्स, फीस या और पैसे जमा करने को कहा गया है। पैसे पहले ही जा चुके हैं; और देने से वापस नहीं मिलेंगे।",
+      "ta": "உங்கள் 'லாபத்தை' எடுக்கும் முன் வரி, கட்டணம் அல்லது கூடுதல் டெபாசிட் கேட்கிறது. உங்கள் பணம் ஏற்கனவே போய்விட்டது; மேலும் கட்டினால் திரும்ப வராது."
+    },
+    "source": "TODO_SOURCE"
+  }
+]

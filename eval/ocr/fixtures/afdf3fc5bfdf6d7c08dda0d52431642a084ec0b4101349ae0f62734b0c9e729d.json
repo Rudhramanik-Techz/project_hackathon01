@@ -1,0 +1,85 @@
+{
+ "image": "paytm_150000.jpg",
+ "lines": [
+  {
+   "text": "Paid Successfully",
+   "confidence": 99.94,
+   "box": [
+    0.0966,
+    0.09574,
+    0.50497,
+    0.12496
+   ]
+  },
+  {
+   "text": "Rs.1,50,000",
+   "confidence": 99.16,
+   "box": [
+    0.10523,
+    0.15026,
+    0.57375,
+    0.19385
+   ]
+  },
+  {
+   "text": "To: Customs Clearance Dept",
+   "confidence": 99.73,
+   "box": [
+    0.09112,
+    0.21919,
+    0.58862,
+    0.24249
+   ]
+  },
+  {
+   "text": "clearance.dept@paytm",
+   "confidence": 99.8,
+   "box": [
+    0.09205,
+    0.25467,
+    0.49706,
+    0.27805
+   ]
+  },
+  {
+   "text": "From: Anita Sharma",
+   "confidence": 98.99,
+   "box": [
+    0.09169,
+    0.29089,
+    0.4103,
+    0.30793
+   ]
+  },
+  {
+   "text": "State Bank of India - 1234",
+   "confidence": 97.25,
+   "box": [
+    0.09095,
+    0.32342,
+    0.51288,
+    0.34049
+   ]
+  },
+  {
+   "text": "UPI Ref No: 633212345670",
+   "confidence": 95.0,
+   "box": [
+    0.0939,
+    0.35642,
+    0.57117,
+    0.3748
+   ]
+  },
+  {
+   "text": "22 Nov 2026, 04:05 PM",
+   "confidence": 96.65,
+   "box": [
+    0.0924,
+    0.39248,
+    0.50456,
+    0.41415
+   ]
+  }
+ ]
+}

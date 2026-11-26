@@ -1,0 +1,17 @@
+{
+  "_comment": "canonical token -> spellings mapped onto it (whole words only) before rules run",
+  "arrest": ["giraftari", "giraftaar", "giraftar", "griftar", "griftari", "kaidhu", "kaithu",
+             "गिरफ्तार", "गिरफ्तारी", "गिरफ़्तार", "गिरफ़्तारी", "கைது"],
+  "police": ["pulis", "polis", "पुलिस", "पोलिस"],
+  "video call": ["vc", "vdo call", "video kol", "videocall", "वीडियो कॉल", "विडियो कॉल", "वीडियो काल"],
+  "otp": ["ओटीपी", "ஓடிபி"],
+  "kyc": ["केवाईसी", "கேஒய்சி"],
+  "aadhaar": ["aadhar", "adhar", "aadhar", "आधार", "ஆதார்"],
+  "whatsapp": ["watsapp", "whatsap", "watsap", "व्हाट्सएप", "வாட்ஸ்அப்"],
+  "telegram": ["टेलीग्राम", "டெலிகிராம்"],
+  "courier": ["curier", "kurier", "corier"],
+  "parcel": ["parsel", "parcal"],
+  "customs": ["custom", "कस्टम", "कस्टम्स"],
+  "money laundering": ["money laundring", "money landering", "मनी लांड्रिंग"],
+  "electricity": ["bijli", "eb", "बिजली", "மின்சார"]
+}

@@ -1,0 +1,38 @@
+[
+  {
+    "id": "TJ-01", "family": "task_job", "weight": 30,
+    "any": ["part ?time (job|work|income|opportunity)", "work from home",
+            "earn (rs |₹ ?|inr )?\\d[\\d ]* .{0,15}(daily|per day|a day|per hour|per task|every day)",
+            "(daily|per day) (income|earning|earnings|salary) .{0,10}\\d",
+            "ghar baithe", "घर बैठे", "पार्ट टाइम", "வீட்டிலிருந்தே", "பகுதி ?நேர (வேலை|வருமானம்)"],
+    "reason": {
+      "en": "It offers easy part-time or work-from-home income, the hook used by task scams.",
+      "hi": "इसमें आसान पार्ट-टाइम या घर बैठे कमाई का लालच है, जो टास्क ठगी का तरीका है।",
+      "ta": "எளிய பகுதிநேர அல்லது வீட்டிலிருந்தே வருமானம் தருவதாகச் சொல்கிறது; இது டாஸ்க் மோசடிகளின் தூண்டில்."
+    },
+    "source": "TODO_SOURCE"
+  },
+  {
+    "id": "TJ-02", "family": "task_job", "weight": 30,
+    "any": ["(like|subscribe|rate|review|follow) .{0,20}(videos?|channels?|hotels?|products?|restaurants?|pages?|posts?)",
+            "(simple|easy|small|online) (tasks?|work)", "task (based|job|work)", "telegram (group|channel|id)"],
+    "reason": {
+      "en": "It pays you for simple tasks like liking videos or rating hotels. These start small and end with you paying them.",
+      "hi": "वीडियो लाइक करने या होटल को रेटिंग देने जैसे आसान कामों के पैसे देने की बात है। ये छोटे से शुरू होकर आपसे पैसे लेने पर खत्म होते हैं।",
+      "ta": "வீடியோவை லைக் செய்வது, ஹோட்டலுக்கு ரேட்டிங் கொடுப்பது போன்ற எளிய வேலைகளுக்குப் பணம் தருவதாகச் சொல்கிறது. இவை சிறிதாகத் தொடங்கி, நீங்கள் பணம் கட்டுவதில் முடியும்."
+    },
+    "source": "TODO_SOURCE"
+  },
+  {
+    "id": "TJ-03", "family": "task_job", "weight": 35, "signal": "payment",
+    "any": ["(prepaid|merchant|vip|premium|combo|bonus) tasks?", "deposit .{0,30}(unlock|withdraw|continue|upgrade|level)",
+            "(recharge|top ?up) .{0,20}(to )?(withdraw|unlock|continue)", "(registration|joining|security) (fee|deposit|amount)",
+            "commission .{0,20}(deposit|pay|withdraw)"],
+    "reason": {
+      "en": "It asks you to deposit money to unlock tasks, commission or a withdrawal. Real jobs never ask you to pay.",
+      "hi": "टास्क, कमीशन या निकासी 'अनलॉक' करने के लिए पैसे जमा करने को कहा गया है। असली नौकरी कभी पैसे नहीं माँगती।",
+      "ta": "டாஸ்க், கமிஷன் அல்லது பணம் எடுப்பதை 'அன்லாக்' செய்ய பணம் டெபாசிட் செய்யச் சொல்கிறது. உண்மையான வேலைகள் ஒருபோதும் பணம் கேட்காது."
+    },
+    "source": "TODO_SOURCE"
+  }
+]

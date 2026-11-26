@@ -1,0 +1,20 @@
+[
+  {
+    "id": "CB-01", "requires": ["authority", "urgency", "payment"], "weight": 20,
+    "reason": {
+      "en": "It combines an authority figure, a deadline and a demand for money, the classic pattern of impersonation scams.",
+      "hi": "इसमें अफसर का रौब, समय-सीमा और पैसों की माँग तीनों एक साथ हैं, जो ठगी का पक्का पैटर्न है।",
+      "ta": "அதிகாரியின் மிரட்டல், காலக்கெடு, பணக் கோரிக்கை மூன்றும் ஒன்றாக உள்ளன; இது ஆள்மாறாட்ட மோசடியின் வழக்கமான முறை."
+    },
+    "source": "TODO_SOURCE"
+  },
+  {
+    "id": "CB-02", "requires": ["secrecy", "payment"], "weight": 15,
+    "reason": {
+      "en": "It asks for money and tells you to keep it secret.",
+      "hi": "पैसे माँगे गए हैं और बात छिपाने को कहा गया है।",
+      "ta": "பணம் கேட்கிறது, அதை ரகசியமாக வைக்கவும் சொல்கிறது."
+    },
+    "source": "TODO_SOURCE"
+  }
+]

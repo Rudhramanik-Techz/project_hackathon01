@@ -1,0 +1,337 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Asli Ya Nakli? v3 - manual-first UPI scam reporting helper. CloudFront + private S3 (OAC) for the site,
+  HTTP API + 3 Python Lambdas (arm64) for /api/v3/*, one retained DynamoDB admission ledger. ap-south-1.
+  No user data or case data is stored anywhere.
+
+Parameters:
+  UseCloudFront:
+    Type: String
+    Default: "false"
+    AllowedValues: ["true", "false"]
+    Description: >
+      "true" = site on private S3 behind CloudFront (needs a verified account). "false" = interim: API Gateway
+      serves the built site through the StaticSite Lambda on the same HTTPS origin as /api/v3/*.
+  BuildId:
+    Type: String
+    Default: dev
+  LlmProvider:
+    Type: String
+    Default: "off"
+    AllowedValues: ["off", bedrock]
+    Description: "off until the Bedrock quota is approved; the browser always has the template explanation."
+  BedrockModelId:
+    Type: String
+    Default: in.anthropic.claude-haiku-4-5-20251001-v1:0
+  BedrockFoundationModelId:
+    Type: String
+    Default: anthropic.claude-haiku-4-5-20251001-v1:0
+  OcrDailyCap:
+    Type: Number
+    Default: 150
+  LlmDailyCap:
+    Type: Number
+    Default: 100
+  AlarmEmail:
+    Type: String
+    Default: ""
+    Description: Optional. Email for the invocation alarm (empty = no subscription).
+
+Conditions:
+  HasAlarmEmail: !Not [!Equals [!Ref AlarmEmail, ""]]
+  WithCloudFront: !Equals [!Ref UseCloudFront, "true"]
+  WithoutCloudFront: !Not [!Condition WithCloudFront]
+
+Globals:
+  Function:
+    Runtime: python3.12
+    Architectures: [arm64]
+    MemorySize: 512
+    Timeout: 10
+    CodeUri: backend/
+    Environment:
+      Variables:
+        STORE: dynamodb
+        TABLE_NAME: !Ref Ledger
+        OCR_PROVIDER: textract
+        LLM_PROVIDER: !Ref LlmProvider
+        BEDROCK_MODEL_ID: !Ref BedrockModelId
+        OCR_DAILY_CAP: !Ref OcrDailyCap
+        LLM_DAILY_CAP: !Ref LlmDailyCap
+        BUILD_ID: !Ref BuildId
+
+Resources:
+  # ---------------------------------------------------------------- ledger
+  # One retained table shared by every release: rollback or a new stack must never reset the allowance.
+  Ledger:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TableName: asli-ledger
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - { AttributeName: pk, AttributeType: S }
+      KeySchema:
+        - { AttributeName: pk, KeyType: HASH }
+      TimeToLiveSpecification:
+        AttributeName: expiresAt
+        Enabled: true
+      SSESpecification:
+        SSEEnabled: true
+      DeletionProtectionEnabled: true
+
+  # -------------------------------------------------------------------- API
+  HttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      # Stage throttles also protect the raw execute-api URL; the ledger is the real paid-call guard.
+      DefaultRouteSettings:
+        ThrottlingBurstLimit: 10
+        ThrottlingRateLimit: 5
+      RouteSettings:
+        "POST /api/v3/ocr":
+          ThrottlingBurstLimit: 3
+          ThrottlingRateLimit: 2
+        "POST /api/v3/explain":
+          ThrottlingBurstLimit: 5
+          ThrottlingRateLimit: 2
+        "GET /api/v3/health":
+          ThrottlingBurstLimit: 10
+          ThrottlingRateLimit: 5
+        "GET /":
+          ThrottlingBurstLimit: 60
+          ThrottlingRateLimit: 30
+        "GET /{proxy+}":
+          ThrottlingBurstLimit: 60
+          ThrottlingRateLimit: 30
+
+  OcrFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: ocr_api.handler.handler
+      Description: POST /api/v3/ocr - admit once in the ledger, then Textract exactly once
+      Events:
+        Api:
+          Type: HttpApi
+          Properties: { ApiId: !Ref HttpApi, Path: /api/v3/ocr, Method: POST }
+      Policies:
+        - Statement:
+            - Effect: Allow
+              # TransactWriteItems checks each item's action: ConditionCheck, Put, Update. GetItem = display count.
+              Action: [dynamodb:ConditionCheckItem, dynamodb:PutItem, dynamodb:UpdateItem, dynamodb:GetItem]
+              Resource: !GetAtt Ledger.Arn
+            - Effect: Allow
+              Action: textract:DetectDocumentText
+              Resource: "*" # DetectDocumentText has no resource-level permissions
+
+  ExplainFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: explain_api.handler.handler
+      Description: POST /api/v3/explain - optional AI wording from rule IDs only (never the message)
+      Events:
+        Api:
+          Type: HttpApi
+          Properties: { ApiId: !Ref HttpApi, Path: /api/v3/explain, Method: POST }
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action: dynamodb:UpdateItem
+              Resource: !GetAtt Ledger.Arn
+            - Effect: Allow
+              Action: bedrock:InvokeModel
+              Resource:
+                - !Sub arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/${BedrockModelId}
+                - !Sub arn:aws:bedrock:ap-south-1::foundation-model/${BedrockFoundationModelId}
+                - !Sub arn:aws:bedrock:ap-south-2::foundation-model/${BedrockFoundationModelId}
+
+  HealthFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: health.handler.handler
+      Description: GET /api/v3/health - liveness, build and region only (no table, no AI)
+      MemorySize: 256
+      Events:
+        Api:
+          Type: HttpApi
+          Properties: { ApiId: !Ref HttpApi, Path: /api/v3/health, Method: GET }
+
+  # Interim site server (only when UseCloudFront=false). No AWS permissions beyond its own logs.
+  StaticSiteFunction:
+    Type: AWS::Serverless::Function
+    Condition: WithoutCloudFront
+    Properties:
+      CodeUri: static_site/
+      Handler: handler.handler
+      Description: Serves the built frontend from API Gateway while CloudFront is unavailable
+      MemorySize: 256
+      Timeout: 5
+      Events:
+        Root:
+          Type: HttpApi
+          Properties: { ApiId: !Ref HttpApi, Path: /, Method: GET }
+        Files:
+          Type: HttpApi
+          Properties: { ApiId: !Ref HttpApi, Path: "/{proxy+}", Method: GET }
+
+  StaticSiteLogs:
+    Type: AWS::Logs::LogGroup
+    Condition: WithoutCloudFront
+    Properties: { LogGroupName: !Sub "/aws/lambda/${StaticSiteFunction}", RetentionInDays: 7 }
+
+  OcrLogs:
+    Type: AWS::Logs::LogGroup
+    Properties: { LogGroupName: !Sub "/aws/lambda/${OcrFunction}", RetentionInDays: 7 }
+  ExplainLogs:
+    Type: AWS::Logs::LogGroup
+    Properties: { LogGroupName: !Sub "/aws/lambda/${ExplainFunction}", RetentionInDays: 7 }
+  HealthLogs:
+    Type: AWS::Logs::LogGroup
+    Properties: { LogGroupName: !Sub "/aws/lambda/${HealthFunction}", RetentionInDays: 7 }
+
+  # ------------------------------------------------------------------ site
+  SiteBucket:
+    Type: AWS::S3::Bucket
+    Condition: WithCloudFront
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault: { SSEAlgorithm: AES256 }
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules: [{ ObjectOwnership: BucketOwnerEnforced }]
+
+  SiteOac:
+    Type: AWS::CloudFront::OriginAccessControl
+    Condition: WithCloudFront
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub "${AWS::StackName}-site-oac"
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  SiteBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Condition: WithCloudFront
+    Properties:
+      Bucket: !Ref SiteBucket
+      PolicyDocument:
+        Statement:
+          - Sid: CloudFrontReadOnly
+            Effect: Allow
+            Principal: { Service: cloudfront.amazonaws.com }
+            Action: s3:GetObject
+            Resource: !Sub "${SiteBucket.Arn}/*"
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub "arn:aws:cloudfront::${AWS::AccountId}:distribution/${Distribution}"
+
+  SecurityHeaders:
+    Type: AWS::CloudFront::ResponseHeadersPolicy
+    Condition: WithCloudFront
+    Properties:
+      ResponseHeadersPolicyConfig:
+        Name: !Sub "${AWS::StackName}-security-headers"
+        SecurityHeadersConfig:
+          ContentSecurityPolicy:
+            Override: true
+            ContentSecurityPolicy: >-
+              default-src 'self'; script-src 'self'; connect-src 'self'; img-src 'self' blob: data:;
+              media-src 'self'; style-src 'self' 'unsafe-inline'; worker-src 'self'; manifest-src 'self';
+              object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'
+          ContentTypeOptions: { Override: true }
+          FrameOptions: { FrameOption: DENY, Override: true }
+          ReferrerPolicy: { ReferrerPolicy: no-referrer, Override: true }
+          StrictTransportSecurity: { AccessControlMaxAgeSec: 31536000, IncludeSubdomains: true, Override: true }
+
+  Distribution:
+    Type: AWS::CloudFront::Distribution
+    Condition: WithCloudFront
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: Asli Ya Nakli v3 - site and /api/v3
+        DefaultRootObject: index.html
+        HttpVersion: http2and3
+        PriceClass: PriceClass_200 # includes India edge locations
+        Origins:
+          - Id: site
+            DomainName: !GetAtt SiteBucket.RegionalDomainName
+            OriginAccessControlId: !GetAtt SiteOac.Id
+            S3OriginConfig: { OriginAccessIdentity: "" }
+          - Id: api
+            DomainName: !Sub "${HttpApi}.execute-api.${AWS::Region}.amazonaws.com"
+            CustomOriginConfig:
+              OriginProtocolPolicy: https-only
+              OriginSSLProtocols: [TLSv1.2]
+        DefaultCacheBehavior:
+          TargetOriginId: site
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods: [GET, HEAD]
+          Compress: true
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6 # Managed-CachingOptimized
+          ResponseHeadersPolicyId: !Ref SecurityHeaders
+        CacheBehaviors:
+          - PathPattern: /api/*
+            TargetOriginId: api
+            ViewerProtocolPolicy: https-only
+            AllowedMethods: [GET, HEAD, OPTIONS, PUT, PATCH, POST, DELETE]
+            CachedMethods: [GET, HEAD]
+            Compress: true
+            CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad # Managed-CachingDisabled
+            OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac # Managed-AllViewerExceptHostHeader
+            ResponseHeadersPolicyId: !Ref SecurityHeaders
+        # No CustomErrorResponses: they would turn API errors into the HTML shell.
+
+  # ------------------------------------------------------------ guardrails
+  AlarmTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      KmsMasterKeyId: alias/aws/sns
+
+  AlarmSubscription:
+    Type: AWS::SNS::Subscription
+    Condition: HasAlarmEmail
+    Properties:
+      TopicArn: !Ref AlarmTopic
+      Protocol: email
+      Endpoint: !Ref AlarmEmail
+
+  InvocationsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: More than 2,000 Lambda invocations in an hour (possible bot traffic)
+      Namespace: AWS/Lambda
+      MetricName: Invocations
+      Statistic: Sum
+      Period: 3600
+      EvaluationPeriods: 1
+      Threshold: 2000
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref AlarmTopic]
+
+Outputs:
+  SiteUrl:
+    Value: !If
+      - WithCloudFront
+      - !Sub "https://${Distribution.DomainName}"
+      - !Sub "https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com"
+  ApiEndpoint:
+    Description: Raw API URL (same throttles and same ledger as the CloudFront path)
+    Value: !Sub "https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com"
+  SiteBucketName:
+    Condition: WithCloudFront
+    Value: !Ref SiteBucket
+  DistributionId:
+    Condition: WithCloudFront
+    Value: !Ref Distribution
+  LedgerTable:
+    Value: !Ref Ledger

@@ -1,0 +1,51 @@
+[
+  {
+    "id": "DA-01", "family": "digital_arrest", "weight": 25, "signal": "authority",
+    "any": ["cbi", "police", "crime branch", "cyber (cell|crime)", "enforcement directorate", "ed (officer|department)",
+            "narcotics", "ncb", "trai", "customs officer", "income tax (officer|department)", "supreme court",
+            "सीबीआई", "क्राइम ब्रांच", "காவல் ?(துறை|அதிகாரி)", "போலீஸ்"],
+    "reason": {
+      "en": "The caller claims to be police, CBI, ED, customs or another agency. Real officers do not demand money over a phone call.",
+      "hi": "कॉल करने वाला खुद को पुलिस, CBI, ED या किसी एजेंसी का अफसर बताता है। असली अफसर फोन पर पैसे नहीं माँगते।",
+      "ta": "அழைப்பவர் தன்னை போலீஸ், CBI, ED அல்லது வேறு அமைப்பின் அதிகாரி என்கிறார். உண்மையான அதிகாரிகள் தொலைபேசியில் பணம் கேட்க மாட்டார்கள்."
+    },
+    "source": "TODO_SOURCE"
+  },
+  {
+    "id": "DA-02", "family": "digital_arrest", "weight": 30,
+    "any": ["money laundering", "drugs?", "hawala", "illegal (transaction|parcel|activity|activities)", "fir",
+            "case (has been )?(registered|filed)", "arrest( warrant)?", "warrant",
+            "मनी लॉन्ड्रिंग", "ड्रग्स", "பணமோசடி", "போதை"],
+    "reason": {
+      "en": "It accuses you of a crime such as money laundering, drugs or an arrest warrant to frighten you.",
+      "hi": "आपको डराने के लिए मनी लॉन्ड्रिंग, ड्रग्स या अरेस्ट वारंट जैसा आरोप लगाया गया है।",
+      "ta": "உங்களை பயமுறுத்த பணமோசடி, போதைப்பொருள் அல்லது கைது வாரண்ட் போன்ற குற்றச்சாட்டு சொல்லப்படுகிறது."
+    },
+    "source": "TODO_SOURCE"
+  },
+  {
+    "id": "DA-03", "family": "digital_arrest", "weight": 40,
+    "any": ["video call", "stay on (the )?(call|line)", "(dont|do not) (disconnect|cut|end) (the )?call", "skype",
+            "digital(ly)? (arrest|custody)", "house arrest", "call mat (kaat|kat)",
+            "வீடியோ (அழைப்|கால்)"],
+    "reason": {
+      "en": "It asks you to stay on a video call. Police and CBI never question or 'arrest' anyone on a video call.",
+      "hi": "आपसे वीडियो कॉल पर बने रहने को कहा गया है। पुलिस या CBI कभी वीडियो कॉल पर पूछताछ या 'अरेस्ट' नहीं करती।",
+      "ta": "வீடியோ அழைப்பில் தொடர்ந்து இருக்கச் சொல்கிறார்கள். போலீஸ் அல்லது CBI வீடியோ அழைப்பில் விசாரிப்பதோ 'கைது' செய்வதோ இல்லை."
+    },
+    "source": "TODO_SOURCE"
+  },
+  {
+    "id": "DA-04", "family": "digital_arrest", "weight": 35, "signal": "payment",
+    "any": ["(safe|secure|verification|rbi|escrow|government|supervision|supervisory) account",
+            "verify (your )?(funds|money|savings)", "(refund|return)(ed)? after (verification|investigation)",
+            "transfer (all )?(your )?(money|savings|funds) for (verification|investigation)",
+            "सुरक्षित खात", "वेरिफिकेशन", "சரிபார்ப்பு(க்கு)? கணக்கு"],
+    "reason": {
+      "en": "It asks you to move money to a 'safe' or 'verification' account. No government agency does this.",
+      "hi": "आपसे पैसे 'सुरक्षित' या 'वेरिफिकेशन' खाते में भेजने को कहा गया है। कोई सरकारी एजेंसी ऐसा नहीं करती।",
+      "ta": "பணத்தை 'பாதுகாப்பான' அல்லது 'சரிபார்ப்பு' கணக்குக்கு மாற்றச் சொல்கிறார்கள். எந்த அரசு அமைப்பும் இப்படிச் செய்யாது."
+    },
+    "source": "TODO_SOURCE"
+  }
+]

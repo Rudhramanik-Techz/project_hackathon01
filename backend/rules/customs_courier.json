@@ -1,0 +1,50 @@
+[
+  {
+    "id": "CC-01", "family": "customs_courier", "weight": 20,
+    "any": ["parcel", "courier", "package", "consignment", "fedex", "dhl", "blue ?dart",
+            "पार्सल", "कूरियर", "பார்சல்", "கூரியர்"],
+    "reason": {
+      "en": "It talks about a parcel or courier you were not expecting.",
+      "hi": "इसमें ऐसे पार्सल या कूरियर की बात है जिसकी आपको उम्मीद नहीं थी।",
+      "ta": "நீங்கள் எதிர்பார்க்காத பார்சல் அல்லது கூரியர் பற்றி பேசுகிறது."
+    },
+    "source": "TODO_SOURCE"
+  },
+  {
+    "id": "CC-02", "family": "customs_courier", "weight": 35, "signal": "authority",
+    "any": ["(seized|held|stopped|detained|confiscated)( by| at)? customs", "customs (department|officer|clearance|duty)",
+            "illegal (items|goods|contents|material)",
+            "(drugs?|mdma|passports?) (found|in (your|the) (parcel|package))",
+            "(parcel|package) .{0,40}(drugs?|mdma|fake passports?)",
+            "सीमा शुल्क", "சுங்க"],
+    "reason": {
+      "en": "It claims customs or police found illegal items in a parcel in your name, a common opening of courier scams.",
+      "hi": "दावा है कि आपके नाम के पार्सल में कस्टम या पुलिस को गैरकानूनी सामान मिला है। कूरियर ठगी अक्सर ऐसे ही शुरू होती है।",
+      "ta": "உங்கள் பெயரிலான பார்சலில் சுங்கம் அல்லது போலீஸ் சட்டவிரோதப் பொருட்களைக் கண்டதாகக் கூறுகிறது. கூரியர் மோசடி பெரும்பாலும் இப்படித்தான் தொடங்கும்."
+    },
+    "source": "TODO_SOURCE"
+  },
+  {
+    "id": "CC-03", "family": "customs_courier", "weight": 30, "signal": "payment",
+    "any": ["(release|clearance|customs|redelivery|re delivery|handling) (fee|charge|charges|duty)",
+            "pay .{0,20}(to|for) (release|redeliver|re deliver)",
+            "(update|confirm) (your )?(delivery )?address", "address (is )?(incomplete|incorrect|invalid)"],
+    "reason": {
+      "en": "It asks for a fee to release, clear or redeliver the parcel. Real couriers don't collect fees from you through links or UPI like this.",
+      "hi": "पार्सल छुड़ाने, क्लियर करने या दोबारा डिलीवरी के लिए फीस माँगी गई है। असली कूरियर ऐसे लिंक या UPI से फीस नहीं लेते।",
+      "ta": "பார்சலை விடுவிக்க, கிளியர் செய்ய அல்லது மீண்டும் டெலிவரி செய்யக் கட்டணம் கேட்கிறார்கள். உண்மையான கூரியர் நிறுவனங்கள் இப்படி லிங்க் அல்லது UPI மூலம் கட்டணம் வாங்குவதில்லை."
+    },
+    "source": "TODO_SOURCE"
+  },
+  {
+    "id": "CC-04", "family": "customs_courier", "weight": 25,
+    "any": ["press (1|0|9|one|nine|zero)", "(1|9|0) (dabaye|dabayen|dabaiye|dabao)", "\\d (दबाएं|दबाएँ|दबाइए)",
+            "\\d ?(ஐ )?அழுத்த"],
+    "reason": {
+      "en": "It asks you to press a number on a recorded call to 'speak to an officer'.",
+      "hi": "रिकॉर्डेड कॉल पर 'अफसर से बात करने' के लिए कोई नंबर दबाने को कहा गया है।",
+      "ta": "பதிவுசெய்யப்பட்ட அழைப்பில் 'அதிகாரியிடம் பேச' ஒரு எண்ணை அழுத்தச் சொல்கிறது."
+    },
+    "source": "TODO_SOURCE"
+  }
+]

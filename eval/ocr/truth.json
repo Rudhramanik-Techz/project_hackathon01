@@ -1,0 +1,70 @@
+{
+    "gpay_48000.jpg":  {
+                           "amountPaise":  4800000,
+                           "upiRef":  "412345678901",
+                           "occurredAt":  "2026-11-22T15:42+05:30",
+                           "receiverVpa":  "scammer.refund@ybl",
+                           "direction":  "outgoing",
+                           "paymentStatus":  "completed"
+                       },
+    "phonepe_25000.jpg":  {
+                              "amountPaise":  2500000,
+                              "upiRef":  "533112345678",
+                              "bankRef":  "T261122151523456789",
+                              "occurredAt":  "2026-11-22T15:15+05:30",
+                              "receiverVpa":  "vikram.singh77@ibl",
+                              "direction":  "outgoing",
+                              "paymentStatus":  "completed"
+                          },
+    "paytm_150000.jpg":  {
+                             "amountPaise":  15000000,
+                             "upiRef":  "633212345670",
+                             "occurredAt":  "2026-11-22T16:05+05:30",
+                             "receiverVpa":  "clearance.dept@paytm",
+                             "paymentStatus":  "completed"
+                         },
+    "bhim_9999.jpg":  {
+                          "amountPaise":  999900,
+                          "upiRef":  "733312345671",
+                          "occurredAt":  "2026-11-22T16:47:10+05:30",
+                          "receiverVpa":  "helpdesk.kyc@axl",
+                          "paymentStatus":  "completed"
+                      },
+    "gpay_hindi_5000.jpg":  {
+                                "amountPaise":  500000,
+                                "upiRef":  "834412345672",
+                                "occurredAt":  "2026-11-23T10:12+05:30",
+                                "receiverVpa":  "priya.v@oksbi"
+                            },
+    "gpay_tamil_12500.jpg":  {
+                                 "amountPaise":  1250000,
+                                 "upiRef":  "935512345673",
+                                 "occurredAt":  "2026-11-23T11:05+05:30",
+                                 "receiverVpa":  "karthik.r1@okaxis"
+                             },
+    "seed_a.jpg":  {
+                       "amountPaise":  100050,
+                       "upiRef":  "012345678901",
+                       "bankRef":  "DEMOA0001",
+                       "occurredAt":  "2026-11-25T11:19+05:30",
+                       "receiverVpa":  "demo.merchant@ybl",
+                       "direction":  "outgoing",
+                       "paymentStatus":  "completed"
+                   },
+    "seed_b1.jpg":  {
+                        "amountPaise":  50000,
+                        "upiRef":  "000000000321",
+                        "occurredAt":  "2026-11-25T11:25+05:30",
+                        "receiverVpa":  "demo.courier@axl",
+                        "direction":  "outgoing",
+                        "paymentStatus":  "completed"
+                    },
+    "seed_b2.jpg":  {
+                        "amountPaise":  50000,
+                        "upiRef":  null,
+                        "occurredAt":  "2026-11-25T11:28+05:30",
+                        "receiverVpa":  "demo.courier@axl",
+                        "direction":  "outgoing",
+                        "paymentStatus":  "completed"
+                    }
+}

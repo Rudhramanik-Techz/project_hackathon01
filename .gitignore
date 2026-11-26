@@ -1,0 +1,29 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# AWS SAM
+.aws-sam/
+
+# Env files (only .env.example is committed)
+.env
+.env.*
+!.env.example
+
+# Frontend
+node_modules/
+dist/
+dev-dist/
+
+# Phase 0 scratch images that may hold real payment data
+scripts/phase0/test.jpg
+scripts/phase0/test.png
+
+# OS / editor
+.DS_Store
+Thumbs.db
+
+# Interim static site package (built by scripts/deploy.sh)
+static_site/dist/

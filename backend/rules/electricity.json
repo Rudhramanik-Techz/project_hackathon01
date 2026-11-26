@@ -1,0 +1,48 @@
+[
+  {
+    "id": "EL-01", "family": "electricity", "weight": 40,
+    "any": ["(electricity|power|bijli|light|current|electric) (connection |supply )?(will be |shall be )?(disconnect|disconnected|cut|kat|katega|kaat|band)",
+            "disconnection",
+            "(बिजली|लाइट) .{0,15}(काट|कट|बंद)",
+            "மின் ?(இணைப்பு|சாரம்|விநியோகம்)? .{0,15}(துண்டிக்க|நிறுத்த|துண்டிப்பு)"],
+    "reason": {
+      "en": "It threatens to cut your electricity connection. Electricity boards send written notices; they don't threaten by SMS from a personal number.",
+      "hi": "बिजली कनेक्शन काटने की धमकी दी गई है। बिजली विभाग लिखित नोटिस भेजता है, निजी नंबर से SMS पर धमकी नहीं देता।",
+      "ta": "மின் இணைப்பைத் துண்டிப்போம் என்று மிரட்டுகிறது. மின்வாரியம் எழுத்துப்பூர்வ அறிவிப்பு அனுப்பும்; தனிப்பட்ட எண்ணிலிருந்து SMS-ல் மிரட்டாது."
+    },
+    "source": "TODO_SOURCE"
+  },
+  {
+    "id": "EL-02", "family": "electricity", "weight": 15, "signal": "urgency",
+    "any": ["tonight", "today (at |by )?\\d", "aaj raat", "आज रात", "இன்று இரவு", "இன்றிரவு",
+            "\\d{1,2} \\d{2} ?(pm|am|baje)"],
+    "reason": {
+      "en": "It gives a deadline like 'tonight at 9:30' to rush you.",
+      "hi": "आपको जल्दबाज़ी में डालने के लिए 'आज रात 9:30 बजे' जैसी समय-सीमा दी गई है।",
+      "ta": "உங்களை அவசரப்படுத்த 'இன்றிரவு 9:30' போன்ற காலக்கெடு கொடுக்கப்படுகிறது."
+    },
+    "source": "TODO_SOURCE"
+  },
+  {
+    "id": "EL-03", "family": "electricity", "weight": 25,
+    "any": ["(previous|last|old) (month )?(s )?bill .{0,20}(not|unpaid|pending)", "bill (was )?not (updated|update)",
+            "(पिछला|पिछले महीने का) बिल", "(முந்தைய|கடந்த மாத) (மின் )?(கட்டணம்|பில்)"],
+    "reason": {
+      "en": "It says your previous bill was not updated or paid, a standard line in electricity scams.",
+      "hi": "कहा गया है कि आपका पिछला बिल अपडेट या जमा नहीं हुआ, जो बिजली ठगी की आम लाइन है।",
+      "ta": "உங்கள் முந்தைய பில் புதுப்பிக்கப்படவில்லை அல்லது செலுத்தப்படவில்லை என்கிறது; இது மின் மோசடிகளின் வழக்கமான வரி."
+    },
+    "source": "TODO_SOURCE"
+  },
+  {
+    "id": "EL-04", "family": "electricity", "weight": 20, "signal": "authority",
+    "any": ["electricity (officer|department|board)", "(contact|call) (our |the |this )?(electricity )?(officer|department)",
+            "(bijli|electricity) (vibhag|office)", "बिजली (अधिकारी|विभाग)", "மின் ?(வாரிய|அதிகாரி)"],
+    "reason": {
+      "en": "It asks you to call an 'electricity officer' on a mobile number.",
+      "hi": "मोबाइल नंबर पर किसी 'बिजली अधिकारी' को कॉल करने को कहा गया है।",
+      "ta": "ஒரு மொபைல் எண்ணில் 'மின் அதிகாரியை' அழைக்கச் சொல்கிறது."
+    },
+    "source": "TODO_SOURCE"
+  }
+]

@@ -1,0 +1,249 @@
+@import "tailwindcss";
+@import "@fontsource-variable/inter"; /* self-hosted: works offline in the PWA, no third-party request */
+
+/* ==========================================================================
+   THEME — edit everything here.
+   1. Brand tokens (--brand-*, --text-*, --surface-*, --status-*).
+   2. Tailwind palette remap: the existing utility classes (slate-900, sky-800,
+      red-700, ...) resolve to the brand tokens, so no markup had to change.
+   ========================================================================== */
+:root {
+  /* ---- 1. Brand tokens ---- */
+  --brand-navy: #0b2545;          /* headers, nav, primary text */
+  --brand-accent: #1f6feb;        /* buttons, links, active, focus */
+  --brand-accent-hover: #1a5fd0;
+  --brand-accent-active: #164fae;
+  --brand-accent-soft: #eaf1fe;   /* tinted badge / selected background */
+
+  --ink-heading: #0f172a;
+  --ink-body: #475569;
+  --ink-muted: #64748b;
+
+  --surface-page: #f8fafc;
+  --surface-card: #ffffff;
+  --surface-hover: #f1f5f9;
+  --border-default: #e2e8f0;
+  --border-strong: #cbd5e1;
+
+  --status-success: #16a34a;
+  --status-success-strong: #15803d; /* white text on it passes AA */
+  --status-warning: #d97706;
+  --status-danger: #dc2626;
+  --status-danger-strong: #b91c1c;
+
+  --focus-ring: 0 0 0 3px rgb(31 111 235 / 0.28);
+  --focus-ring-danger: 0 0 0 3px rgb(220 38 38 / 0.22);
+  --shadow-card: 0 1px 2px rgb(15 23 42 / 0.04), 0 1px 3px rgb(15 23 42 / 0.06);
+  --radius-control: 0.5rem;       /* buttons, inputs: 8px */
+  --radius-card: 0.75rem;         /* cards, containers: 12px */
+  --ease-ui: 160ms ease;
+}
+
+@theme {
+  /* ---- Typography ---- */
+  --font-sans: "Inter Variable", Inter, "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto,
+    "Noto Sans", "Noto Sans Devanagari", "Noto Sans Tamil", sans-serif;
+
+  /* ---- 2. Tailwind palette remap (only the shades the app uses) ---- */
+  --color-slate-900: var(--brand-navy);
+  --color-slate-950: var(--ink-heading);
+  --color-slate-600: var(--ink-body);
+  --color-slate-500: var(--ink-muted);
+  --color-slate-300: var(--border-strong);
+  --color-slate-200: var(--border-default);
+  --color-slate-100: var(--surface-hover);
+  --color-slate-50: var(--surface-page);
+
+  --color-sky-50: var(--brand-accent-soft);
+  --color-sky-400: var(--brand-accent);
+  --color-sky-500: var(--brand-accent);
+  --color-sky-800: var(--brand-accent);
+  --color-violet-100: var(--brand-accent-soft);
+  --color-violet-900: var(--brand-navy);
+
+  --color-red-600: var(--status-danger);
+  --color-red-700: var(--status-danger);
+  --color-red-800: var(--status-danger-strong);
+
+  --color-amber-400: #f59e0b;
+  --color-amber-500: var(--status-warning);
+  --color-amber-600: #b45309;
+
+  --color-green-600: var(--status-success);
+  --color-emerald-50: #f0fdf4;
+  --color-emerald-300: #86efac;
+  --color-emerald-700: var(--status-success-strong);
+  --color-emerald-900: #14532d;
+  --color-emerald-950: #052e16;
+
+  /* ---- Radius & shadow scale ---- */
+  --radius-2xl: var(--radius-card);
+  --radius-xl: var(--radius-card);
+  --radius-lg: var(--radius-control);
+  --shadow-sm: var(--shadow-card);
+}
+
+/* ==========================================================================
+   Base element styling (layered, so per-element utility classes still win)
+   ========================================================================== */
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    margin: 0;
+    background: var(--surface-page);
+    color: var(--ink-body);
+    font-family: var(--font-sans);
+    font-size: 1rem;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Headings get the heading colour unless they sit inside a tinted/coloured container. */
+  :where(h1, h2, h3, h4):where(:not([class*="text-"] *)) {
+    color: var(--ink-heading);
+  }
+  :where(h1, h2, h3, h4) {
+    letter-spacing: -0.011em;
+  }
+
+  :where(button, a, input, select, textarea, summary, label) {
+    transition: background-color var(--ease-ui), border-color var(--ease-ui), color var(--ease-ui),
+      box-shadow var(--ease-ui), filter var(--ease-ui);
+  }
+
+  input[type="checkbox"],
+  input[type="radio"] {
+    accent-color: var(--brand-accent);
+  }
+}
+
+/* ==========================================================================
+   Component states (unlayered: applied on top of the existing utilities)
+   ========================================================================== */
+
+/* Keyboard focus — always visible, accent ring; white on the red emergency surfaces. */
+:focus-visible {
+  outline: 2px solid var(--brand-accent);
+  outline-offset: 2px;
+}
+.bg-red-700 :focus-visible,
+.bg-green-600:focus-visible {
+  outline-color: #ffffff;
+}
+
+/* Buttons: 8px radius on controls, subtle hover, clear disabled. */
+button.rounded-xl,
+a.rounded-xl {
+  border-radius: var(--radius-control);
+}
+button:not(:disabled):hover,
+a.rounded-lg:hover,
+a.rounded-xl:hover,
+a.rounded-2xl:hover {
+  filter: brightness(0.96);
+}
+button:not(:disabled):active {
+  filter: brightness(0.92);
+}
+button:disabled {
+  cursor: not-allowed;
+}
+
+/* Primary (solid navy class) buttons → solid accent. */
+button.bg-slate-900 {
+  background-color: var(--brand-accent);
+  color: #ffffff;
+}
+button.bg-slate-900:not(:disabled):hover {
+  filter: none;
+  background-color: var(--brand-accent-hover);
+}
+button.bg-slate-900:not(:disabled):active {
+  filter: none;
+  background-color: var(--brand-accent-active);
+}
+
+/* Secondary outlined buttons → navy text, accent border on hover. */
+button.border-slate-300.bg-white,
+a.border-slate-300 {
+  color: var(--brand-navy);
+}
+button.border-slate-300:not(:disabled):hover,
+a.border-slate-300:hover,
+button.border-slate-900:not(:disabled):hover {
+  filter: none;
+  border-color: var(--brand-accent);
+  background-color: var(--brand-accent-soft);
+}
+
+/* Inputs / textareas / selects */
+input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+select,
+textarea {
+  background-color: var(--surface-card);
+  border-color: var(--border-strong);
+  border-radius: var(--radius-control);
+  color: var(--ink-heading);
+}
+textarea {
+  padding-block: 0.625rem;
+  line-height: 1.6;
+}
+input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):hover,
+select:hover,
+textarea:hover {
+  border-color: #94a3b8;
+}
+input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--brand-accent);
+  box-shadow: var(--focus-ring);
+}
+[aria-invalid="true"],
+[aria-invalid="true"]:hover,
+[aria-invalid="true"]:focus {
+  border-color: var(--status-danger) !important;
+}
+[aria-invalid="true"]:focus {
+  box-shadow: var(--focus-ring-danger);
+}
+::placeholder {
+  color: #94a3b8;
+}
+
+/* Cards / containers: white surface, light border, soft shadow. */
+:where(section, article, details, div, button).bg-white.border-slate-200 {
+  box-shadow: var(--shadow-card);
+}
+details > summary {
+  color: var(--brand-navy);
+}
+
+/* Lists with row dividers: light dividers, subtle hover. */
+ul.divide-y > li:hover {
+  background-color: var(--surface-page);
+}
+
+/* The sticky top bar (App.tsx TopBar) styles itself. */
+
+/* Footer links in accent. */
+footer a {
+  color: var(--brand-accent);
+  text-underline-offset: 3px;
+}
+
+/* Links: comfortable underline offset, thicker on hover. */
+a.underline,
+button.underline {
+  text-underline-offset: 3px;
+}
+a.underline:hover,
+button.underline:hover {
+  text-decoration-thickness: 2px;
+}

@@ -1,0 +1,51 @@
+[
+  {
+    "id": "KYC-01", "family": "kyc_sim", "weight": 40,
+    "any": ["(account|card|sim|wallet|pan|aadhaar|mobile number|number|yono|net banking) .{0,20}(blocked|block|suspended|deactivated|closed|disabled|frozen|band)",
+            "kyc .{0,15}(pending|expired|expire|expiring|update|incomplete|not updated|verify|suspended)",
+            "(खाता|सिम|अकाउंट|कार्ड) .{0,15}बंद", "(கணக்கு|சிம்|கார்டு) .{0,20}(முடக்க|நிறுத்த|மூட)"],
+    "reason": {
+      "en": "It threatens that your account, card or SIM will be blocked. Banks and telecom companies don't threaten this by SMS or call.",
+      "hi": "धमकी है कि आपका खाता, कार्ड या सिम बंद हो जाएगा। बैंक और टेलीकॉम कंपनियाँ SMS या कॉल पर ऐसी धमकी नहीं देतीं।",
+      "ta": "உங்கள் கணக்கு, கார்டு அல்லது சிம் முடக்கப்படும் என்று மிரட்டுகிறது. வங்கிகளும் தொலைத்தொடர்பு நிறுவனங்களும் SMS அல்லது அழைப்பில் இப்படி மிரட்டுவதில்லை."
+    },
+    "source": "TODO_SOURCE"
+  },
+  {
+    "id": "KYC-02", "family": "kyc_sim", "weight": 30,
+    "any": ["apk", "anydesk", "any desk", "teamviewer", "team viewer", "quick ?support", "rustdesk", "screen shar(e|ing)",
+            "(download|install) .{0,30}app", "(click|tap|open)(ing)? (on )?(the |this |below )?(link|here)",
+            "(update|complete|verify) (your )?kyc (here|now|online|through|via|by|using|on)"],
+    "reason": {
+      "en": "It sends you to a link or asks you to install an app (APK, AnyDesk, TeamViewer). This can give scammers control of your phone.",
+      "hi": "इसमें लिंक खोलने या कोई ऐप (APK, AnyDesk, TeamViewer) डाउनलोड करने को कहा गया है। इससे ठग आपका फोन कंट्रोल कर सकते हैं।",
+      "ta": "ஒரு லிங்கைத் திறக்கவோ அல்லது ஒரு ஆப்பை (APK, AnyDesk, TeamViewer) நிறுவவோ சொல்கிறது. இதன் மூலம் மோசடியாளர்கள் உங்கள் போனைக் கட்டுப்படுத்தலாம்."
+    },
+    "source": "TODO_SOURCE"
+  },
+  {
+    "id": "KYC-03", "family": "kyc_sim", "weight": 35,
+    "any": ["(?<!not )(?<!dont )(?<!never )(share|tell|send|give|provide|read out|forward|batao|bataiye|bata do|bhejo) (me |us )?(the |your |that |this )?(\\d+ digit )?(otp|cvv|password|mpin|(upi |atm )?pin)",
+            "(otp|cvv|pin) (batao|bataiye|bata do|bhejo|share karo|share kare|share karein)",
+            "otp (बताएं|बताइए|बताओ|भेजें|भेजो)",
+            "otp ?(ஐ|யை)? ?(சொல்லுங்கள்|சொல்லவும்|அனுப்பவும்|பகிரவும்)"],
+    "reason": {
+      "en": "It asks for your OTP, PIN, CVV or password. No bank or official ever needs these.",
+      "hi": "आपका OTP, PIN, CVV या पासवर्ड माँगा गया है। किसी बैंक या अफसर को इनकी कभी ज़रूरत नहीं होती।",
+      "ta": "உங்கள் OTP, PIN, CVV அல்லது கடவுச்சொல்லைக் கேட்கிறது. எந்த வங்கிக்கும் அதிகாரிக்கும் இவை ஒருபோதும் தேவையில்லை."
+    },
+    "source": "TODO_SOURCE"
+  },
+  {
+    "id": "KYC-04", "family": "kyc_sim", "weight": 20, "signal": "authority",
+    "any": ["(sbi|hdfc|icici|axis|kotak|pnb|canara|bank) (manager|officer|executive|customer care|helpdesk|kyc team|kyc department)",
+            "rbi", "reserve bank", "(airtel|jio|vodafone|bsnl) (team|officer|customer care|kyc)",
+            "department of telecom"],
+    "reason": {
+      "en": "It claims to be from your bank, RBI or a telecom company, which scammers often pretend to be.",
+      "hi": "यह खुद को आपके बैंक, RBI या टेलीकॉम कंपनी से बताता है, जिनका नाम ठग अक्सर इस्तेमाल करते हैं।",
+      "ta": "இது உங்கள் வங்கி, RBI அல்லது தொலைத்தொடர்பு நிறுவனத்திலிருந்து வருவதாகக் கூறுகிறது; மோசடியாளர்கள் அடிக்கடி இப்படி நடிக்கிறார்கள்."
+    },
+    "source": "TODO_SOURCE"
+  }
+]
