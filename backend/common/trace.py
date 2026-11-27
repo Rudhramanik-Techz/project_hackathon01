@@ -19,5 +19,9 @@ class Tracer:
         finally:
             self.stages[name] = self.stages.get(name, 0) + int((time.monotonic() - t0) * 1000)
 
+    def elapsed_s(self) -> float:
+        """Seconds since the handler started (monotonic)."""
+        return time.monotonic() - self._start
+
     def total_ms(self) -> int:
         return int((time.monotonic() - self._start) * 1000)

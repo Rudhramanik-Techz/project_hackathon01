@@ -17,6 +17,7 @@ import { Footer, MobileBar, Masthead, Nav, PageFrame, Ticker, UtilBar } from "./
 import { stopReading } from "./ui/ReadButton";
 import { Toast } from "./ui/toast";
 import { applyView, loadView, saveView, type View } from "./lib/view";
+import { registerSW } from "virtual:pwa-register";
 
 function readRoute(): Route {
   const r = window.location.hash.replace(/^#\/?/, "");
@@ -109,6 +110,28 @@ export default function App() {
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
   }, [draft, lost]);
+
+  // A new app version waits while a case is open (spec R2-40). With no case open it is applied at a calm
+  // moment: on the home page, when moving to another page, or while the tab is hidden.
+  const [updateReady, setUpdateReady] = useState(false);
+  const applyUpdate = useRef<(() => void) | null>(null);
+  useEffect(() => {
+    if (!("serviceWorker" in navigator) || import.meta.env.DEV) return;
+    const update = registerSW({ onNeedRefresh: () => setUpdateReady(true) });
+    applyUpdate.current = () => void update(true);
+  }, []);
+  useEffect(() => {
+    if (!updateReady || draft) return;
+    if (page === "home" || document.hidden) return applyUpdate.current?.();
+    const onHide = () => document.hidden && applyUpdate.current?.();
+    document.addEventListener("visibilitychange", onHide);
+    return () => document.removeEventListener("visibilitychange", onHide);
+  }, [updateReady, draft, page]);
+  const pageAtUpdate = useRef(page);
+  useEffect(() => {
+    if (updateReady && !draft && page !== pageAtUpdate.current) applyUpdate.current?.();
+    pageAtUpdate.current = page;
+  }, [page]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const go = (next: Page) => {
     const hash = next === "home" ? "" : `#/${next}`;

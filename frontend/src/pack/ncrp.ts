@@ -14,6 +14,22 @@ export interface NcrpCard {
   fields: NcrpField[];
 }
 
+const EXCERPT_BUDGET = 600; // keeps the portal description short; whole excerpts are kept, never cut mid-way
+
+/** The chosen message excerpts, whole, in the order added. Any left out are said to be left out. */
+function messageExcerpts(excerpts: string[]): string {
+  const kept: string[] = [];
+  let used = 0;
+  for (const e of excerpts) {
+    if (used + e.length > EXCERPT_BUDGET && kept.length) break;
+    kept.push(e.length > EXCERPT_BUDGET ? `${e.slice(0, EXCERPT_BUDGET)}…` : e);
+    used += e.length;
+  }
+  if (!kept.length) return "";
+  const more = excerpts.length - kept.length;
+  return `Messages received (numbers hidden): ${kept.map((e) => `"${e}"`).join(" ")}${more ? ` (${more} more kept in my records)` : ""}`;
+}
+
 export function buildDescription(f: Facts, suspects: string[], links: string[]): string {
   const first = f.txs.find((t) => t.occurredAt);
   const when = first ? formatIst(first.occurredAt, "en-IN") : null;
@@ -36,7 +52,7 @@ export function buildDescription(f: Facts, suspects: string[], links: string[]):
     ...payments,
     suspects.length ? `The suspected fraudster contacted me from ${suspects.join(", ")}.` : "",
     links.length ? `Links or apps used: ${links.join(", ")}.` : "",
-    f.info.evidence.trim() ? `Message received (redacted): "${f.info.evidence.trim().slice(0, 600)}"` : "",
+    messageExcerpts(f.excerpts),
     f.info.ack.trim() ? `Reported on 1930, acknowledgement number ${f.info.ack.trim()}.` : "",
     // Asked only when there is a confirmed payment the bank could trace.
     f.txs.some(canBeHeld) ? "I request that the beneficiary account be traced and the amount held, if possible." : "",

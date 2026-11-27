@@ -47,6 +47,8 @@ npm run dev
 - Already fixed before 27 Nov (checked in code and tests): demo sample asks before replacing a real case; a failed re-read keeps confirmed fields; empty case says "suspected" and asks for no hold; incoming payments are not "Sent to"; unknown details are left unsaid; Hindi and Tamil digits are hidden.
 - [x] Safe app updates: the service worker now uses `registerType: "prompt"`, so a new version waits until every tab is closed instead of replacing the app under an open case. There is no "update available" prompt yet.
 - [x] Rollback safety: `deploy.sh` no longer uses `s3 sync --delete`, so the previous build's hashed files stay in the bucket.
+- [x] Spec gaps closed on 27 Nov (no new AWS permissions needed): HEAD on static routes; OCR handler 7 s budget (no admission or dispatch without time for the provider) and cross-site browser origin check (`ALLOWED_ORIGINS` for extra origins); excerpt selection before a message enters the report, kept as a list of up to 12; linking a screenshot to another payment and moving a reading with confirmation; previous/next unchecked detail; crop zoom; app updates applied when no case is open. The browser calls the Bedrock explain route only in a build with `VITE_EXPLAIN=on`.
+- Still open because they need AWS approval, an email address or other people: CloudFront, Bedrock, budget alerts, Tamil audio, rule sources, evaluation sets, user study, real-device tests. Visitors who opened the 26 Nov version see the new one after closing all its tabs once.
 - Note: a **successful** re-read still withdraws fields confirmed from the earlier reading. That is deliberate (spec §4, R3-A02; tested in `model.test.ts`).
 
 ## P1: before submitting

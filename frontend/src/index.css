@@ -455,3 +455,35 @@ html.easy #menubtn,html.easy .alertbar{display:none}
 .legal .dot.ok{background:#4ccf8a}.legal .dot.down{background:#e6a817}
 .legal [data-testid]{align-self:center}
 #view:focus,#view:focus-visible{outline:0;box-shadow:none}
+
+/* Bolo voice input on the checker */
+.bolo{display:flex;flex-direction:column;align-items:flex-start;gap:.35rem;margin:.5rem 0 .75rem}
+.bolo .err{margin:0}
+#replay{margin-top:.5rem}
+.verdict #replay span{display:inline}
+
+/* One-page report pack: preview in the "Printable" tab, and the only content while printing */
+#packsheet{display:none}
+.sheet-preview{border:1px solid var(--line);background:#fff;padding:1rem;margin:.75rem 0;overflow-x:auto}
+.sheet{color:#000;font-size:.88rem;line-height:1.35;max-width:48rem}
+.sheet h2{font-size:1.25rem;margin:0 0 .25rem;border:0;padding:0}
+.sheet h3{font-size:.95rem;margin:.75rem 0 .3rem;text-transform:uppercase;letter-spacing:.03em}
+.sheet header p,.sheet-foot p{margin:.2rem 0;font-size:.82rem}
+.sheet table{width:100%;border-collapse:collapse;margin:0;border:1px solid #888}
+.sheet th,.sheet td{border:1px solid #888;padding:.25rem .4rem;text-align:left;vertical-align:top}
+.sheet tbody th{width:38% !important;font-weight:600;background:#f3f3f3}
+.sheet-pay th{width:auto !important;background:#f3f3f3;font-size:.8rem}
+.sheet-pay td{font-size:.82rem}
+.sheet .mono{font-variant-numeric:tabular-nums;white-space:nowrap}
+.sheet-desc{margin:0;white-space:pre-wrap}
+.sheet .blank{display:inline-block;min-width:12rem;min-height:1.6rem}
+.sheet-foot{margin-top:.75rem}
+.sheet-demo{border:2px solid #b00;color:#b00;font-weight:700;text-align:center;padding:.2rem;margin:0 0 .5rem}
+@media print{
+  @page{size:A4;margin:12mm}
+  html.printing-pack body>*:not(#packsheet){display:none !important}
+  html.printing-pack #packsheet{display:block}
+  html.printing-pack body{background:#fff}
+  html.printing-pack .sheet{max-width:none;font-size:9.5pt}
+  html.printing-pack .sheet *{visibility:visible}
+}

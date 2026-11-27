@@ -101,11 +101,13 @@ export interface CaseState {
   factsSig: string;
   images: ImageRec[];
   txs: Transaction[];
-  info: { name: string; phone: string; suspects: string; links: string; story: string; evidence: string; ack: string };
+  info: { name: string; phone: string; suspects: string; links: string; story: string; ack: string };
+  /** Parts of a scam message the person chose to add, numbers already hidden. At most LIMITS.excerpts. */
+  excerpts: string[];
   attest: Record<AttestKey, number | null>;
 }
 
-export const LIMITS = { images: 3, txs: 12, text: 2000, story: 1000, ack: 64 } as const;
+export const LIMITS = { images: 3, txs: 12, excerpts: 12, text: 2000, story: 1000, ack: 64 } as const;
 
 const uuid = () => crypto.randomUUID();
 
@@ -124,7 +126,8 @@ export function newCase(origin: Origin, generation: number, scenarioClock: strin
     factsSig: "",
     images: [],
     txs: [],
-    info: { name: "", phone: "", suspects: "", links: "", story: "", evidence: "", ack: "" },
+    info: { name: "", phone: "", suspects: "", links: "", story: "", ack: "" },
+    excerpts: [],
     attest: { called1930: null, submittedPortal: null, contactedBank: null },
   };
   return withFacts(c);
@@ -191,6 +194,7 @@ export function hasDraft(c: CaseState): boolean {
     c.origin === "personal" &&
     (c.images.length > 0 ||
       c.txs.some((t) => FIELD_ORDER.some((f) => t.fields[f].state !== "empty")) ||
+      c.excerpts.length > 0 ||
       Object.values(c.info).some((v) => v.trim() !== ""))
   );
 }
@@ -200,6 +204,7 @@ function factsSignature(c: CaseState): string {
   return JSON.stringify([
     c.txs.map((t) => [t.id, FIELD_ORDER.map((f) => (t.fields[f].state === "confirmed" ? (t.fields[f] as { value: string }).value : null))]),
     c.info,
+    c.excerpts,
   ]);
 }
 
@@ -239,6 +244,9 @@ export type Action =
   | { type: "cancelEdit"; txId: string; field: FieldName }
   | { type: "setUnknown"; txId: string; field: FieldName }
   | { type: "info"; key: keyof CaseState["info"]; value: string }
+  | { type: "addExcerpt"; text: string }
+  | { type: "removeExcerpt"; index: number }
+  | { type: "linkImage"; txId: string; imageId: string }
   | { type: "attest"; key: AttestKey; on: boolean };
 
 function updateTx(c: CaseState, txId: string, fn: (t: Transaction) => Transaction): CaseState {
@@ -432,6 +440,20 @@ function reduceInner(c: CaseState, a: Action): CaseState {
       if (a.value.length > 2 * max) return c; // cheap guard before anything else
       return { ...c, info: { ...c.info, [a.key]: [...a.value].slice(0, max).join("") } };
     }
+    case "addExcerpt": {
+      // Bounded and never silently cut: an over-long or extra excerpt is refused and the list is unchanged.
+      const text = a.text.trim();
+      if (!text || a.text.length > 2 * LIMITS.text || [...text].length > LIMITS.text) return c;
+      if (c.excerpts.length >= LIMITS.excerpts || c.excerpts.includes(text)) return c;
+      return { ...c, excerpts: [...c.excerpts, text] };
+    }
+    case "removeExcerpt":
+      return { ...c, excerpts: c.excerpts.filter((_, i) => i !== a.index) };
+    case "linkImage":
+      // Lets a screenshot's readings be used for another payment. Moving a reading still needs an explicit
+      // choice ("propose"), which withdraws it from wherever it was used before.
+      if (!c.images.some((i) => i.id === a.imageId)) return c;
+      return updateTx(c, a.txId, (t) => (t.imageIds.includes(a.imageId) ? t : { ...t, imageIds: [...t.imageIds, a.imageId] }));
     case "attest":
       return { ...c, attest: { ...c.attest, [a.key]: a.on ? c.factsRev : null } };
   }
@@ -464,6 +486,7 @@ export interface Facts {
   rev: number;
   txs: FactsTx[];
   info: CaseState["info"];
+  excerpts: string[];
 }
 
 /** The only view outputs may read: confirmed values at one revision. Chronological; unknown times last. */
@@ -491,7 +514,7 @@ export function facts(c: CaseState): Facts {
     if (b.occurredAt) return 1;
     return order.get(a.id)! - order.get(b.id)!;
   });
-  return { rev: c.factsRev, txs, info: c.info };
+  return { rev: c.factsRev, txs, info: c.info, excerpts: c.excerpts };
 }
 
 export const isCompletedOutgoing = (t: FactsTx) => t.direction === "outgoing" && t.paymentStatus === "completed";

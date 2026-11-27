@@ -285,3 +285,53 @@ test("a payment confirmed as failed or reversed is said so, not 'not sure it wen
   assert.match(build1930Script(unknown, "en", []), /not sure this payment went through/);
   assert.match(buildDescription(unknown, [], []), /status not confirmed/);
 });
+
+test("message excerpts: bounded list, no duplicates, never cut, and part of the report revision", () => {
+  let c = newCase("personal", 0);
+  const rev = c.factsRev;
+  c = run(c, { type: "addExcerpt", text: "  Your parcel is held, pay ₹••••  " });
+  assert.deepEqual(c.excerpts, ["Your parcel is held, pay ₹••••"]);
+  assert.equal(c.factsRev, rev + 1);
+  assert.equal(hasDraft(c), true);
+  assert.equal(run(c, { type: "addExcerpt", text: "Your parcel is held, pay ₹••••" }).excerpts.length, 1);
+  assert.equal(run(c, { type: "addExcerpt", text: "x".repeat(2001) }).excerpts.length, 1, "over-long is refused, not cut");
+  for (let i = 0; i < 20; i++) c = run(c, { type: "addExcerpt", text: `part ${i}` });
+  assert.equal(c.excerpts.length, 12);
+  assert.equal(c.excerpts[11], "part 10");
+  c = run(c, { type: "removeExcerpt", index: 0 });
+  assert.equal(c.excerpts[0], "part 0");
+  assert.match(buildDescription(facts(c), [], []), /"part 0"/);
+});
+
+test("a screenshot can be linked to another payment, and moving a reading withdraws it from the first", () => {
+  let c = read(withImage(newCase("personal", 0), "imgA"), "imgA", "k1", A);
+  const first = c.txs[0]!.id;
+  c = run(c, { type: "accept", txId: first, field: "upiRef" }, { type: "addTx" });
+  const second = c.txs[1]!.id;
+  c = run(c, { type: "linkImage", txId: second, imageId: "imgA" });
+  assert.deepEqual(c.txs[1]!.imageIds, ["imgA"]);
+  assert.equal(run(c, { type: "linkImage", txId: second, imageId: "nope" }), c, "unknown image is ignored");
+  c = run(c, { type: "propose", txId: second, field: "upiRef", candidate: A[0]!, imageId: "imgA" });
+  assert.equal(c.txs[0]!.fields.upiRef.state, "empty", "the reading left Payment 1");
+  assert.equal(c.txs[1]!.fields.upiRef.state, "proposed");
+  assert.equal(facts(c).txs.find((x) => x.id === first)!.upiRef, "");
+});
+
+test("printable pack: confirmed facts only, unknowns as a dash, status said plainly, demo-labelled file name", async () => {
+  const { buildSheet, DASH, sheetTitle } = await import("../src/pack/sheet");
+  const f = facts(typed({ amountPaise: "1,000.50", upiRef: "012345678901", direction: "outgoing", paymentStatus: "failed" }));
+  const s = buildSheet(f, ["9876543210"], []);
+  assert.equal(s.rows.length, 1);
+  const r = s.rows[0]!;
+  assert.match(r.amount, /1,000\.50/);
+  assert.equal(r.ref, "UTR 012345678901", "leading zero kept");
+  assert.equal(r.to, DASH);
+  assert.equal(r.when, DASH);
+  assert.equal(r.status, "Sent, failed");
+  assert.match(s.description, /012345678901/);
+  assert.equal(buildSheet(facts(newCase("personal", 0)), [], []).rows.length, 0);
+  assert.equal(sheetTitle(3, false), "Asli-Ya-Nakli-report-rev-3");
+  assert.equal(sheetTitle(3, true), "DEMO-Asli-Ya-Nakli-report-rev-3");
+  assert.equal(facts(typed({ amountPaise: "5" })).txs.length, 1);
+  assert.equal(buildSheet(facts(typed({ amountPaise: "5" })), [], []).rows[0]!.status, "Not confirmed");
+});

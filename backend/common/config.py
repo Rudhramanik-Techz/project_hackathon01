@@ -53,6 +53,11 @@ def bedrock_model_id() -> str:
     return _env("BEDROCK_MODEL_ID", DEFAULT_MODEL_ID)
 
 
+def allowed_origins() -> set[str]:
+    """Extra browser origins allowed to call paid routes (e.g. the CloudFront domain), comma-separated."""
+    return {o.strip().lower().rstrip('/') for o in _env('ALLOWED_ORIGINS', '').split(',') if o.strip()}
+
+
 def table_name() -> str:
     return _env("TABLE_NAME", "asli-ledger")
 

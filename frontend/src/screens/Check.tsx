@@ -1,8 +1,8 @@
 // Scam checker running on the phone (v3). The message is never sent anywhere. The optional AI wording gets
 // only the verdict and rule IDs. "Already sent money?" is offered at every tier.
-import { type Dispatch, useEffect, useMemo, useState } from "react";
+import { type Dispatch, useEffect, useMemo, useRef, useState } from "react";
 import { postExplain } from "../api";
-import type { Action, CaseState } from "../case/model";
+import { type Action, type CaseState, LIMITS } from "../case/model";
 import { SCAMS } from "../content";
 import { type Lang, raw, type StringKey, useLang, useT } from "../i18n";
 import { isCombo, MAX_SCALARS, redact, type Rule, type Combo, withinLimit } from "../lib/checker";
@@ -10,6 +10,7 @@ import { copyText } from "../lib/files";
 import { cannotCheck } from "../lib/readable";
 import { engine } from "../lib/rules";
 import { useKept } from "../lib/session";
+import { type Recognizer, recognitionErrorKey, recognizerCtor, speakLocal, speechTag, whenVoicesReady } from "../lib/voice";
 import { templateExplanation } from "../lib/templates";
 import type { Actions } from "../routes";
 import samples from "../samples/samples.json";
@@ -18,6 +19,9 @@ import { ReadButton, stopReading } from "../ui/ReadButton";
 import { toast } from "../ui/toast";
 
 const AI_LANGS = ["en", "hi", "ta"]; // the explain service supports these
+// The spec has no runtime AI model (§1.3). The optional Bedrock wording is only called when a build sets
+// VITE_EXPLAIN=on (after the AWS account is approved); otherwise the reviewed template text is shown.
+const AI_ON = import.meta.env.VITE_EXPLAIN === "on";
 
 /** The pasted message and what was last checked: held in memory only, kept while moving between pages. */
 export function useCheckState() {
@@ -50,7 +54,7 @@ function reason(m: Rule | Combo, lang: Lang): string {
   return raw(lang, `r.${m.id}`) || (m.reason as Record<string, string>)[lang] || m.reason.en;
 }
 
-function Result({ message, c, dispatch, actions }: { message: string; c: CaseState; dispatch: Dispatch<Action>; actions: Actions }) {
+function Result({ message, c, dispatch, actions, spoken = 0 }: { message: string; c: CaseState; dispatch: Dispatch<Action>; actions: Actions; spoken?: number }) {
   const t = useT();
   const lang = useLang();
   const verdict = useMemo(() => engine.check(message), [message]);
@@ -59,7 +63,7 @@ function Result({ message, c, dispatch, actions }: { message: string; c: CaseSta
   // Optional friendlier wording from Bedrock: only tier, family and rule IDs leave the phone.
   useEffect(() => {
     setAi({ loading: false, text: "", lang });
-    if (verdict.tier === "no_known_pattern" || !navigator.onLine || !AI_LANGS.includes(lang)) return;
+    if (!AI_ON || verdict.tier === "no_known_pattern" || !navigator.onLine || !AI_LANGS.includes(lang)) return;
     let live = true;
     setAi({ loading: true, text: "", lang });
     void postExplain({ lang, tier: verdict.tier, family: verdict.family, ruleIds: verdict.matched.map((m) => m.id) }).then((r) => {
@@ -77,8 +81,17 @@ function Result({ message, c, dispatch, actions }: { message: string; c: CaseSta
   const template = none ? "" : templateExplanation(verdict.tier, verdict.family, reasons, lang);
   const redacted = redact(message.trim());
   const title: StringKey = cannot ? "cantRead" : verdict.tier === "likely_scam" ? "tierLikely" : verdict.tier === "suspicious" ? "tierSuspicious" : "tierNone";
-  const added = c.origin === "personal" && !!redacted && c.info.evidence === redacted;
   const steps: StringKey[] = none && !cannot ? ["d3", "d1"] : ["d1", "d2", "d3", "d4"];
+
+  // A voice check is answered by voice too: the verdict and the first reason, once, in the chosen language.
+  // With no on-device voice for that language nothing is spoken; the text stays on screen.
+  const say = `${t(title)}. ${reasons[0] ?? t(cannot ? "cantReadSub" : "tierNoneSub")}`;
+  const [canSay, setCanSay] = useState(false);
+  useEffect(() => {
+    if (!spoken) return;
+    return whenVoicesReady(() => setCanSay(speakLocal(say, lang)));
+  }, [spoken]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => stopReading(), []);
 
   return (
     <>
@@ -97,6 +110,11 @@ function Result({ message, c, dispatch, actions }: { message: string; c: CaseSta
               <span>{t("type")}: <button type="button" className="link" onClick={() => actions.openScam(SCAMS[scam]!)}>{t(`scam.${scam}.n` as StringKey)}</button></span>
             )}
           </>
+        )}
+        {spoken > 0 && canSay && (
+          <button type="button" className="btn sec sm" id="replay" onClick={() => speakLocal(say, lang)}>
+            <span aria-hidden="true">🔊 </span>{t("boloReplay")}
+          </button>
         )}
       </div>
 
@@ -146,20 +164,7 @@ function Result({ message, c, dispatch, actions }: { message: string; c: CaseSta
         </div>
       </div>
 
-      {redacted && (
-        <div className="pad">
-          <h3>{t("evidencePreview")}</h3>
-          <pre className="doc">{redacted}</pre>
-          <button type="button" className="btn sec sm" id="addevidence"
-            onClick={() => {
-              if (c.origin === "synthetic") dispatch({ type: "reset", origin: "personal" }); // never mix demo into a real case
-              dispatch({ type: "info", key: "evidence", value: redacted });
-            }}>
-            {t("addBtn")}
-          </button>{" "}
-          {added && <span role="status">✓ {t("added")}</span>}
-        </div>
-      )}
+      {redacted && <Excerpts key={redacted} redacted={redacted} c={c} dispatch={dispatch} />}
 
       <div className="pad handoff">
         <strong>{t(verdict.tier === "likely_scam" ? "handoffBanner" : "paidAnyTier")}</strong>
@@ -169,9 +174,109 @@ function Result({ message, c, dispatch, actions }: { message: string; c: CaseSta
   );
 }
 
+/** "Bolo": speak the message instead of typing it. Hidden when the browser has no speech recognition. */
+function Bolo({ onText }: { onText: (text: string) => void }) {
+  const t = useT();
+  const lang = useLang();
+  const Ctor = useMemo(recognizerCtor, []);
+  const [listening, setListening] = useState(false);
+  const [msg, setMsg] = useState<StringKey | null>(null);
+  const rec = useRef<Recognizer | null>(null);
+  useEffect(() => () => rec.current?.abort(), [lang]); // a language change or leaving the page stops listening
+  if (!Ctor) return null;
+
+  const toggle = () => {
+    if (rec.current) return rec.current.abort();
+    stopReading();
+    window.speechSynthesis?.getVoices(); // Chrome loads its voice list on first request; warm it for the answer
+    setMsg(null);
+    const r = new Ctor();
+    r.lang = speechTag(lang);
+    r.continuous = false; // the browser stops by itself when the person pauses
+    r.interimResults = false;
+    r.maxAlternatives = 1;
+    let heard = "";
+    r.onresult = (e) => {
+      heard = Array.from(e.results, (res) => res[0]?.transcript ?? "").join(" ").trim();
+    };
+    r.onerror = (e) => {
+      const key = recognitionErrorKey(e.error);
+      if (key) setMsg(key);
+    };
+    r.onend = () => {
+      rec.current = null;
+      setListening(false);
+      if (heard) onText(heard);
+    };
+    rec.current = r;
+    setListening(true);
+    try {
+      r.start();
+    } catch {
+      rec.current = null;
+      setListening(false);
+      setMsg("boloError");
+    }
+  };
+
+  return (
+    <div className="bolo">
+      <button type="button" className={`btn ${listening ? "red" : "sec"}`} id="bolo" aria-pressed={listening} onClick={toggle}>
+        <span aria-hidden="true">🎤 </span>{t(listening ? "boloListening" : "boloButton")}
+      </button>
+      {msg && <p role="alert" className="err">{t(msg)}</p>}
+      <small className="muted">{t("boloNote")}</small>
+    </div>
+  );
+}
+
+const SENTENCE = /(?<=[.!?।])\s+|\n+/u;
+
+/** Nothing from the message reaches the report until the person ticks the parts to add (spec R3-A20). */
+function Excerpts({ redacted, c, dispatch }: { redacted: string; c: CaseState; dispatch: Dispatch<Action> }) {
+  const t = useT();
+  const parts = useMemo(() => redacted.split(SENTENCE).map((s) => s.trim()).filter(Boolean), [redacted]);
+  const [picked, setPicked] = useState<number[]>([]);
+  const text = parts.filter((_, i) => picked.includes(i)).join(" ");
+  const added = c.origin === "personal" && !!text && c.excerpts.includes(text);
+  const full = c.origin === "personal" && c.excerpts.length >= LIMITS.excerpts;
+  return (
+    <div className="pad">
+      <h3>{t("excerptPick")}</h3>
+      <div id="excerpt-parts">
+        {parts.map((p, i) => (
+          <label className="tick" key={i}>
+            <input type="checkbox" checked={picked.includes(i)}
+              onChange={(e) => setPicked(e.target.checked ? [...picked, i].sort((a, b) => a - b) : picked.filter((x) => x !== i))} />
+            <span>{p}</span>
+          </label>
+        ))}
+      </div>
+      {text && (
+        <>
+          <h3>{t("evidencePreview")}</h3>
+          <pre className="doc">{text}</pre>
+        </>
+      )}
+      <button type="button" className="btn sec sm" id="addevidence" disabled={!text || added || full}
+        onClick={() => {
+          if (c.origin === "synthetic") dispatch({ type: "reset", origin: "personal" }); // never mix demo into a real case
+          dispatch({ type: "addExcerpt", text });
+        }}>
+        {t("addBtn")}
+      </button>{" "}
+      {added && <span role="status">✓ {t("added")}</span>}
+      {full && !added && <span role="status" className="warnline">{t("excerptFull")}</span>}
+    </div>
+  );
+}
+
 export function Check({ state, c, dispatch, actions }: { state: CheckState; c: CaseState; dispatch: Dispatch<Action>; actions: Actions }) {
   const t = useT();
   const [tooLong, setTooLong] = useState(false);
+  // Which check came from voice: its result is read aloud once, with a button to hear it again.
+  const [voiceText, setVoiceText] = useState<string | null>(null);
+  const [voiceRun, setVoiceRun] = useState(0);
   const examples: [keyof typeof samples.check, StringKey][] = [["digitalArrest", "scam.0.n" as StringKey], ["courier", "scam.1.n" as StringKey], ["genuine", "exGen"]];
   const { text, checked } = state;
   const problem: StringKey | null = tooLong ? "checkTooLong" : checked === null ? null : !checked.trim() ? "checkEmpty" : !withinLimit(checked) ? "checkTooLong" : null;
@@ -190,6 +295,15 @@ export function Check({ state, c, dispatch, actions }: { state: CheckState; c: C
                 state.edit(v);
               }} />
             <p>{[...text].length}/{MAX_SCALARS}. {t("checkLocalNote")}</p>
+            <Bolo
+              onText={(spoken) => {
+                if (spoken.length > 2 * MAX_SCALARS) return setTooLong(true);
+                setTooLong(false);
+                setVoiceText(spoken);
+                setVoiceRun((n) => n + 1);
+                state.run(spoken);
+              }}
+            />
             <div className="row">
               <button type="button" className="btn" id="run" onClick={() => (setTooLong(false), state.run(text))}>{t("checkButton")}</button>
               <button type="button" className="btn sec" onClick={() => (setTooLong(false), state.clear())}>{t("clear")}</button>
@@ -208,7 +322,7 @@ export function Check({ state, c, dispatch, actions }: { state: CheckState; c: C
           ) : checked === null ? (
             <div className="pad">{t("checkResultEmpty")}</div>
           ) : (
-            <Result message={checked} c={c} dispatch={dispatch} actions={actions} />
+            <Result message={checked} c={c} dispatch={dispatch} actions={actions} spoken={voiceText !== null && voiceText === checked ? voiceRun : 0} />
           )}
         </section>
       </div>

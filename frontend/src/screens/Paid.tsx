@@ -20,6 +20,7 @@ import {
 import { CopyButton } from "../components/CopyButton";
 import { Crop } from "../components/Crop";
 import { EvidenceDrawer } from "../components/EvidenceDrawer";
+import { PackSheet, PrintPortal, usePrintPack } from "../components/PackSheet";
 import { dateLocale, isStringKey, type Lang, type StringKey, type Translate, useLang, useT } from "../i18n";
 import { saveFile } from "../lib/files";
 import { formatIst, formatPaise, minutesSince, spaceDigits, splitList } from "../lib/format";
@@ -28,6 +29,7 @@ import { ImageError, prepareImage } from "../lib/image";
 import { useKept, usePlace } from "../lib/session";
 import { buildBankEmail } from "../pack/email";
 import { buildNcrpCards } from "../pack/ncrp";
+import { buildSheet, sheetTitle } from "../pack/sheet";
 import { build1930Script } from "../pack/script";
 import type { Actions } from "../routes";
 import { Ext, Panel } from "../ui/bits";
@@ -76,6 +78,7 @@ export function Paid({ c, dispatch, lost, actions }: { c: CaseState; dispatch: D
   const [picked, setPicked] = useKept<string | null>(`tx:${c.id}`, null);
   const tx = c.txs.find((x) => x.id === picked) ?? c.txs[0];
   const jumpTo = useRef<string | null>(null);
+  const lastJump = useRef<{ txId: string; f: string } | null>(null);
   const addedTx = useRef(false);
   const sentImage = useRef<string | null>(null);
 
@@ -100,11 +103,21 @@ export function Paid({ c, dispatch, lost, actions }: { c: CaseState; dispatch: D
     if (img.state === "reviewable") setPicked(c.txs.find((x) => x.imageIds.includes(img.id))?.id ?? null);
   }, [c.txs, c.images, setPicked]);
 
-  const nextUnchecked = () => {
-    const open = (x: Transaction) => FIELD_ORDER.find((f) => OPEN_STATES.includes(x.fields[f].state));
-    const target = tx && open(tx) ? tx : c.txs.find(open);
-    if (!target) return;
-    const field = open(target)!;
+  // Every unchecked detail, payment by payment, in field order. "Next"/"Previous" step through it from the
+  // detail that has focus, wrapping around.
+  const stepUnchecked = (dir: 1 | -1) => {
+    const list = c.txs.flatMap((x) => FIELD_ORDER.filter((f) => OPEN_STATES.includes(x.fields[f].state)).map((f) => ({ x, f })));
+    if (!list.length) return;
+    // Where we are: the detail that has focus, or else the one the last jump went to (clicking this button
+    // moves focus onto the button itself).
+    const focused = document.activeElement?.closest<HTMLElement>(".field")?.id.replace(/^row-/, "");
+    const from = focused && tx ? { txId: tx.id, f: focused } : lastJump.current;
+    const at = from ? list.findIndex(({ x, f }) => x.id === from.txId && f === from.f) : -1;
+    // With nothing focused, start inside the payment being shown.
+    const first = list.findIndex(({ x }) => x.id === tx?.id);
+    const here = at >= 0 ? at : dir === 1 ? (first >= 0 ? first - 1 : -1) : first >= 0 ? first + 1 : list.length;
+    const { x: target, f: field } = list[(here + dir + list.length) % list.length]!;
+    lastJump.current = { txId: target.id, f: field };
     jumpTo.current = field;
     setPicked(target.id);
     if (target.id === tx?.id) {
@@ -189,7 +202,10 @@ export function Paid({ c, dispatch, lost, actions }: { c: CaseState; dispatch: D
             <b>{t("progress", { a: confirmed, b: total })}</b>
             <progress max={total || 1} value={confirmed} />
             {pending > 0 && <p className="warnline">{t("unresolved", { n: pending })}</p>}
-            <button type="button" className="btn sec sm" disabled={!c.txs.length} onClick={nextUnchecked}>{t("nextU")}</button>
+            <div className="row">
+              <button type="button" className="btn sec sm" id="prevu" disabled={!c.txs.length} onClick={() => stepUnchecked(-1)}>{t("prevU")}</button>
+              <button type="button" className="btn sec sm" id="nextu" disabled={!c.txs.length} onClick={() => stepUnchecked(1)}>{t("nextU")}</button>
+            </div>
           </div>
           <ol className="panel toc">
             {SECTIONS.map(([id, label]) => (
@@ -224,6 +240,7 @@ export function Paid({ c, dispatch, lost, actions }: { c: CaseState; dispatch: D
                 </button>
               )}
             </div>
+            {tx && <LinkShots tx={tx} c={c} dispatch={dispatch} />}
             {tx ? FIELD_ORDER.map((f) => <FieldRow key={`${tx.id}-${f}`} tx={tx} field={f} c={c} dispatch={dispatch} />) : <p className="pad">{t("noPayments")}</p>}
           </Panel>
           <CaseInfo c={c} dispatch={dispatch} />
@@ -239,20 +256,44 @@ export function Paid({ c, dispatch, lost, actions }: { c: CaseState; dispatch: D
 
 // ---------------------------------------------------------------------------------------------- payments
 
+/** A screenshot read for one payment can also supply readings for another (e.g. two payments on one screen). */
+function LinkShots({ tx, c, dispatch }: { tx: Transaction; c: CaseState; dispatch: Dispatch<Action> }) {
+  const t = useT();
+  const unlinked = c.images.filter((i) => i.candidates.length > 0 && !tx.imageIds.includes(i.id));
+  if (!unlinked.length) return null;
+  return (
+    <div className="pad other" id="linkshots">
+      {t("linkShot")}:{" "}
+      {unlinked.map((i) => (
+        <button key={i.id} type="button" className="btn sec sm" onClick={() => dispatch({ type: "linkImage", txId: tx.id, imageId: i.id })}>
+          {i.name}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function FieldRow({ tx, field, c, dispatch }: { tx: Transaction; field: FieldName; c: CaseState; dispatch: Dispatch<Action> }) {
   const t = useT();
   const lang = useLang();
   const f = tx.fields[field];
+  const [zoom, setZoom] = useState(false);
   const label = t(`f_${field}` as StringKey);
   const options = ENUMS[field];
   const source = "source" in f ? f.source : null;
   const img = source ? c.images.find((i) => i.id === source.imageId) : null;
-  const usedIds = new Set(
-    c.txs.flatMap((x) => FIELD_ORDER.map((k) => x.fields[k]).flatMap((v) => ("source" in v && v.source ? [`${v.source.imageId}/${v.source.candidateId}`] : []))),
+  // Where each reading is used now (payment number), so moving one is an explicit, visible choice.
+  const usedIn = new Map<string, number>();
+  c.txs.forEach((x, n) =>
+    FIELD_ORDER.forEach((k) => {
+      const v = x.fields[k];
+      if ("source" in v && v.source) usedIn.set(`${v.source.imageId}/${v.source.candidateId}`, n + 1);
+    }),
   );
+  const mine = source ? `${source.imageId}/${source.candidateId}` : "";
   const others = c.images
     .filter((i) => tx.imageIds.includes(i.id))
-    .flatMap((i) => i.candidates.filter((k) => k.field === field && !usedIds.has(`${i.id}/${k.id}`)).map((k) => ({ img: i, k })));
+    .flatMap((i) => i.candidates.filter((k) => k.field === field && `${i.id}/${k.id}` !== mine).map((k) => ({ img: i, k, n: usedIn.get(`${i.id}/${k.id}`) })));
   const choose = (value: string) => {
     dispatch({ type: "edit", txId: tx.id, field, text: value });
     dispatch({ type: "confirmEdit", txId: tx.id, field });
@@ -300,7 +341,8 @@ function FieldRow({ tx, field, c, dispatch }: { tx: Transaction; field: FieldNam
 
         {source && img && f.state !== "editing" && (
           <>
-            <Crop url={img.url} width={img.width} height={img.height} box={source.box} label={`${label}: ${source.raw}`} />
+            <Crop url={img.url} width={img.width} height={img.height} box={source.box} label={`${label}: ${source.raw}`} big={zoom} />
+            <button type="button" className="link" aria-pressed={zoom} onClick={() => setZoom(!zoom)}>{t(zoom ? "zoomOut" : "zoomIn")}</button>
             <p className="srcline">
               “{source.raw}”{source.label ? ` · ${source.label}` : ""}
               {source.confidenceBp < 9000 ? ` · ⚠ ${t("hardToRead")}` : ""}
@@ -311,10 +353,12 @@ function FieldRow({ tx, field, c, dispatch }: { tx: Transaction; field: FieldNam
         {others.length > 0 && f.state !== "editing" && (
           <div className="other">
             {t("otherReadings")}:{" "}
-            {others.map(({ img: i, k }) => (
-              <button key={`${i.id}/${k.id}`} type="button" className="btn sec sm" onClick={() => dispatch({ type: "propose", txId: tx.id, field, candidate: k, imageId: i.id })}>
+            {others.map(({ img: i, k, n }) => (
+              <button key={`${i.id}/${k.id}`} type="button" className="btn sec sm"
+                onClick={() => (n === undefined || window.confirm(t("moveReading", { n }))) && dispatch({ type: "propose", txId: tx.id, field, candidate: k, imageId: i.id })}>
                 {display(field, k.value, t, lang)}
                 {k.label ? ` (${k.label})` : ""}
+                {n !== undefined ? ` · ${t("usedInTx", { n })}` : ""}
               </button>
             ))}
           </div>
@@ -469,11 +513,18 @@ function CaseInfo({ c, dispatch }: { c: CaseState; dispatch: Dispatch<Action> })
           <input id="info-ack" maxLength={64} autoComplete="off" value={c.info.ack} onChange={(e) => set("ack", e.target.value)} />
         </label>
         <small>{t("fAckHelp")}</small>
-        {c.info.evidence && (
-          <label>
-            {t("fEvidence")}
-            <textarea id="info-evidence" rows={3} value={c.info.evidence} onChange={(e) => set("evidence", e.target.value)} />
-          </label>
+        {c.excerpts.length > 0 && (
+          <div id="excerpts">
+            <b>{t("fEvidence")} ({c.excerpts.length}/{LIMITS.excerpts})</b>
+            <ol>
+              {c.excerpts.map((e, i) => (
+                <li key={e}>
+                  <span>{e}</span>{" "}
+                  <button type="button" className="link" onClick={() => dispatch({ type: "removeExcerpt", index: i })}>{t("removeExcerpt")}</button>
+                </li>
+              ))}
+            </ol>
+          </div>
         )}
       </div>
     </Panel>
@@ -496,6 +547,14 @@ function Outputs({ c }: { c: CaseState }) {
   const cards = useMemo(() => buildNcrpCards(f, suspects, links), [f, c.info.suspects, c.info.links]); // eslint-disable-line react-hooks/exhaustive-deps
   const email = useMemo(() => buildBankEmail(f), [f]);
   const bank = `Subject: ${email.subject}\n\n${email.body}`;
+  const sheet = useMemo(() => buildSheet(f, suspects, links), [f, c.info.suspects, c.info.links]); // eslint-disable-line react-hooks/exhaustive-deps
+  const synthetic = c.origin === "synthetic";
+  const { printing, print } = usePrintPack();
+  // A demo case prints its fixed scenario time; a real one the current time.
+  const printedAt = useMemo(() => {
+    const { date, time } = formatIst(c.scenarioClock ?? new Date().toISOString(), "en-IN");
+    return `${date}, ${time}`;
+  }, [c.scenarioClock, printing]); // eslint-disable-line react-hooks/exhaustive-deps
   const all = [script, cards.map((cd) => [`## ${cd.title}`, ...cd.fields.map((x) => `${x.label}: ${x.value}`)].join("\n")).join("\n\n"), bank].join("\n\n----------\n\n");
 
   return (
@@ -553,64 +612,22 @@ function Outputs({ c }: { c: CaseState }) {
         )}
         {tab === "print" && (
           <>
-            <div className="row">
-              <button type="button" className="btn sm" onClick={() => window.print()}>{t("print")}</button>
+            <p>{t("printPackHelp")}</p>
+            <div className="sheet-preview">
+              <PackSheet sheet={sheet} synthetic={synthetic} printedAt={printedAt} />
             </div>
-            <Summary c={c} />
           </>
         )}
+        <PrintPortal active={printing}>
+          <PackSheet sheet={sheet} synthetic={synthetic} printedAt={printedAt} />
+        </PrintPortal>
         <div className="row">
+          <button type="button" className="btn sm" id="printpack" disabled={printing} onClick={() => print(sheetTitle(f.rev, synthetic))}>{t("printPack")}</button>
           <CopyButton text={all} label={t("copyAll")} />
           <button type="button" className="btn sec sm" id="download" onClick={() => saveFile(`\ufeff${all}`, "text/plain", "asli-ya-nakli-report.txt")}>{t("download")}</button>
         </div>
       </div>
     </Panel>
-  );
-}
-
-const SUMMARY_INFO: [keyof CaseState["info"], StringKey][] = [
-  ["name", "fName"], ["phone", "fPhone"], ["suspects", "fSuspects"], ["links", "fLinks"], ["story", "fStory"], ["ack", "fAck"], ["evidence", "fEvidence"],
-];
-
-/** The printable one-page record: confirmed values only, everything else marked as not confirmed. */
-function Summary({ c }: { c: CaseState }) {
-  const t = useT();
-  const lang = useLang();
-  const f = facts(c);
-  const info = SUMMARY_INFO.filter(([k]) => f.info[k].trim());
-  return (
-    <div className="printable">
-      <h3>Asli Ya Nakli: {t("sum")}</h3>
-      <p>{c.origin === "synthetic" ? `${t("syntheticBanner")}. ` : ""}{t("packRev", { n: f.rev })}. {t("footerAbout")}</p>
-      {f.txs.map((x, i) => (
-        <div key={x.id}>
-          <h4>{t("txN", { n: i + 1 })}</h4>
-          <table>
-            <tbody>
-              {FIELD_ORDER.map((k) => {
-                const v = x[k as "upiRef"] as unknown;
-                const text = v == null || String(v) === "" ? "" : display(k, String(v), t, lang);
-                return (
-                  <tr key={k}>
-                    <th scope="row">{t(`f_${k}` as StringKey)}</th>
-                    <td>{text || <i>{t("notConf")}</i>}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      ))}
-      {info.length > 0 && (
-        <table>
-          <tbody>
-            {info.map(([k, label]) => (
-              <tr key={k}><th scope="row">{t(label)}</th><td>{f.info[k]}</td></tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-    </div>
   );
 }
 

@@ -10,10 +10,10 @@ export default defineConfig({
     react(),
     tailwindcss(),
     VitePWA({
-      // "prompt": a new version waits until every tab is closed, so it never swaps the app under an open case
-      // (the case lives only in memory). There is no prompt UI; the update applies on the next fresh open.
+      // "prompt": a new version never activates by itself, so it cannot swap the app under an open case (the
+      // case lives only in memory). App.tsx applies it when no case is open; otherwise on the next fresh open.
       registerType: "prompt",
-      injectRegister: "auto",
+      injectRegister: false, // registered in App.tsx, which decides when a waiting update is applied
       includeAssets: ["icon.svg", "favicon.svg", "samples/*.jpg", "audio/**/*.mp3", "eval-report.md"],
       manifest: {
         name: "Asli Ya Nakli?",

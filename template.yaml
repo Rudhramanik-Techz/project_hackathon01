@@ -175,6 +175,13 @@ Resources:
         Files:
           Type: HttpApi
           Properties: { ApiId: !Ref HttpApi, Path: "/{proxy+}", Method: GET }
+        # HEAD answers like GET without a body (spec §3: static routes allow GET/HEAD). Default throttles apply.
+        RootHead:
+          Type: HttpApi
+          Properties: { ApiId: !Ref HttpApi, Path: /, Method: HEAD }
+        FilesHead:
+          Type: HttpApi
+          Properties: { ApiId: !Ref HttpApi, Path: "/{proxy+}", Method: HEAD }
 
   StaticSiteLogs:
     Type: AWS::Logs::LogGroup
