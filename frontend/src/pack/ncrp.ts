@@ -48,7 +48,8 @@ export function buildDescription(f: Facts, suspects: string[], links: string[]):
   const parts = [
     "I want to report a suspected UPI fraud.",
     when ? `The earliest payment listed here was on ${when.date} at ${when.time}.` : "",
-    f.info.story.trim(),
+    // The portal is in English: use the person's reviewed English version of the story when there is one.
+    f.info.storyEn.trim() || f.info.story.trim(),
     ...payments,
     suspects.length ? `The suspected fraudster contacted me from ${suspects.join(", ")}.` : "",
     links.length ? `Links or apps used: ${links.join(", ")}.` : "",

@@ -2,7 +2,7 @@ AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
 Description: >
   Asli Ya Nakli? v3 - manual-first UPI scam reporting helper. CloudFront + private S3 (OAC) for the site,
-  HTTP API + 3 Python Lambdas (arm64) for /api/v3/*, one retained DynamoDB admission ledger. ap-south-1.
+  HTTP API + Python Lambdas (arm64) for /api/v3/*, one retained DynamoDB admission ledger. ap-south-1.
   No user data or case data is stored anywhere.
 
 Parameters:
@@ -33,6 +33,10 @@ Parameters:
   LlmDailyCap:
     Type: Number
     Default: 100
+  TranslateDailyCap:
+    Type: Number
+    Default: 300
+    Description: Story translations per UTC day (Amazon Translate, opt-in from the report page).
   AlarmEmail:
     Type: String
     Default: ""
@@ -59,6 +63,8 @@ Globals:
         BEDROCK_MODEL_ID: !Ref BedrockModelId
         OCR_DAILY_CAP: !Ref OcrDailyCap
         LLM_DAILY_CAP: !Ref LlmDailyCap
+        TRANSLATE_PROVIDER: aws
+        TRANSLATE_DAILY_CAP: !Ref TranslateDailyCap
         BUILD_ID: !Ref BuildId
 
 Resources:
@@ -97,6 +103,9 @@ Resources:
         "POST /api/v3/explain":
           ThrottlingBurstLimit: 5
           ThrottlingRateLimit: 2
+        "POST /api/v3/translate":
+          ThrottlingBurstLimit: 3
+          ThrottlingRateLimit: 1
         "GET /api/v3/health":
           ThrottlingBurstLimit: 10
           ThrottlingRateLimit: 5
@@ -147,6 +156,25 @@ Resources:
                 - !Sub arn:aws:bedrock:ap-south-1::foundation-model/${BedrockFoundationModelId}
                 - !Sub arn:aws:bedrock:ap-south-2::foundation-model/${BedrockFoundationModelId}
 
+  TranslateFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: translate_api.handler.handler
+      Description: POST /api/v3/translate - the person's story to English (Amazon Translate), opt-in, never stored
+      Events:
+        Api:
+          Type: HttpApi
+          Properties: { ApiId: !Ref HttpApi, Path: /api/v3/translate, Method: POST }
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action: dynamodb:UpdateItem # TRDAY daily cap only
+              Resource: !GetAtt Ledger.Arn
+            - Effect: Allow
+              # TranslateText with SourceLanguageCode=auto also calls Comprehend to detect the language.
+              Action: [translate:TranslateText, comprehend:DetectDominantLanguage]
+              Resource: "*" # neither action supports resource-level permissions
+
   HealthFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -194,6 +222,9 @@ Resources:
   ExplainLogs:
     Type: AWS::Logs::LogGroup
     Properties: { LogGroupName: !Sub "/aws/lambda/${ExplainFunction}", RetentionInDays: 7 }
+  TranslateLogs:
+    Type: AWS::Logs::LogGroup
+    Properties: { LogGroupName: !Sub "/aws/lambda/${TranslateFunction}", RetentionInDays: 7 }
   HealthLogs:
     Type: AWS::Logs::LogGroup
     Properties: { LogGroupName: !Sub "/aws/lambda/${HealthFunction}", RetentionInDays: 7 }

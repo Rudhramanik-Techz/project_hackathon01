@@ -11,7 +11,7 @@ import time
 from common import config
 from common.errors import (ApiError, image_too_large, invalid_image, invalid_request, ocr_deadline,
                            unavailable, unsupported_media)
-from common.http import Request, api_handler, single_uuid_header
+from common.http import Request, api_handler, browser_origin_ok, single_uuid_header
 from common.jpeg import jpeg_size
 from common.ledger import get_ledger
 from common.log import log_event
@@ -28,18 +28,6 @@ HEADROOM_S = 0.5  # parsing and serialising after the provider answers
 MIN_PROVIDER_S = 1.0  # less than this left: do not start the provider at all
 
 
-def _browser_origin_ok(req: Request) -> bool:
-    """Browsers must call from this site. A request without Origin is not a cross-site browser call; the
-    ledger still limits what any caller can spend (same-origin delivery is not authentication)."""
-    origin = (req.header("origin") or "").strip().lower().rstrip("/")
-    if not origin:
-        return True
-    if (req.header("sec-fetch-site") or "").strip().lower() == "same-origin":
-        return True
-    host = (req.header("host") or "").strip().lower()
-    return origin == f"https://{host}" or origin in config.allowed_origins()
-
-
 def _serialize(body: dict) -> dict:
     """Keep the compact UTF-8 response under 32 KiB by dropping whole lowest-ranked candidates."""
     while len(json.dumps(body, ensure_ascii=False, separators=(",", ":")).encode()) > MAX_RESPONSE_BYTES:
@@ -54,7 +42,7 @@ def _serialize(body: dict) -> dict:
 @api_handler(ROUTE)
 def handler(req: Request) -> tuple[int, dict]:
     with req.tracer.stage("validate"):
-        if req.has_query or not _browser_origin_ok(req):
+        if req.has_query or not browser_origin_ok(req):
             raise invalid_request()
         content_type = (req.header("content-type") or "").strip().lower()
         if content_type != "image/jpeg":

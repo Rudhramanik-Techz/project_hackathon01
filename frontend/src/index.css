@@ -487,3 +487,9 @@ html.easy #menubtn,html.easy .alertbar{display:none}
   html.printing-pack .sheet{max-width:none;font-size:9.5pt}
   html.printing-pack .sheet *{visibility:visible}
 }
+
+/* Optional story translation on the report page */
+.translate{display:flex;flex-direction:column;gap:.4rem;border-left:4px solid var(--line);padding:.5rem 0 .5rem .75rem;margin:.25rem 0 .5rem}
+.translate .link{align-self:flex-start}
+.form .translate label.tick{display:flex;font-weight:400;margin-bottom:0}
+.form .translate label.tick input{flex:none;margin-top:.2rem}

@@ -75,6 +75,15 @@ def llm_daily_cap() -> int:
     return _env_int("LLM_DAILY_CAP", 100)
 
 
+def translate_daily_cap() -> int:
+    return _env_int("TRANSLATE_DAILY_CAP", 300)
+
+
+def translate_provider() -> str:
+    """off | mock | aws. mock (local default) returns a marked fake translation; AWS uses Amazon Translate."""
+    return _env("TRANSLATE_PROVIDER", "mock")
+
+
 def ocr_daily_cap() -> int:
     return _env_int("OCR_DAILY_CAP", 150)
 

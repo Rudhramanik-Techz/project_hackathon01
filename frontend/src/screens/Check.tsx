@@ -87,9 +87,14 @@ function Result({ message, c, dispatch, actions, spoken = 0 }: { message: string
   // With no on-device voice for that language nothing is spoken; the text stays on screen.
   const say = `${t(title)}. ${reasons[0] ?? t(cannot ? "cantReadSub" : "tierNoneSub")}`;
   const [canSay, setCanSay] = useState(false);
+  const saidFor = useRef(0); // each voice check is spoken once, even if React runs the effect twice
   useEffect(() => {
-    if (!spoken) return;
-    return whenVoicesReady(() => setCanSay(speakLocal(say, lang)));
+    if (!spoken || saidFor.current === spoken) return;
+    return whenVoicesReady(() => {
+      if (saidFor.current === spoken) return;
+      saidFor.current = spoken;
+      setCanSay(speakLocal(say, lang));
+    });
   }, [spoken]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => stopReading(), []);
 

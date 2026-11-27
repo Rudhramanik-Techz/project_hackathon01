@@ -335,3 +335,16 @@ test("printable pack: confirmed facts only, unknowns as a dash, status said plai
   assert.equal(facts(typed({ amountPaise: "5" })).txs.length, 1);
   assert.equal(buildSheet(facts(typed({ amountPaise: "5" })), [], []).rows[0]!.status, "Not confirmed");
 });
+
+test("an English version of the story, when present, is what the English complaint text uses", () => {
+  let c = run(newCase("personal", 0), { type: "info", key: "story", value: "मेरे साथ धोखा हुआ" });
+  assert.match(buildDescription(facts(c), [], []), /मेरे साथ धोखा हुआ/);
+  const rev = c.factsRev;
+  c = run(c, { type: "info", key: "storyEn", value: "I was cheated." });
+  assert.equal(c.factsRev, rev + 1, "the English version is part of the report");
+  const d = buildDescription(facts(c), [], []);
+  assert.match(d, /I was cheated\./);
+  assert.doesNotMatch(d, /धोखा/);
+  c = run(c, { type: "info", key: "storyEn", value: "" });
+  assert.match(buildDescription(facts(c), [], []), /मेरे साथ धोखा हुआ/, "removing it falls back to the story");
+});

@@ -101,7 +101,9 @@ export interface CaseState {
   factsSig: string;
   images: ImageRec[];
   txs: Transaction[];
-  info: { name: string; phone: string; suspects: string; links: string; story: string; ack: string };
+  /** storyEn: an English version of the story for the portal, machine-translated on request and then edited
+   * by the person. When present it is used instead of the story in the English outputs. */
+  info: { name: string; phone: string; suspects: string; links: string; story: string; storyEn: string; ack: string };
   /** Parts of a scam message the person chose to add, numbers already hidden. At most LIMITS.excerpts. */
   excerpts: string[];
   attest: Record<AttestKey, number | null>;
@@ -126,7 +128,7 @@ export function newCase(origin: Origin, generation: number, scenarioClock: strin
     factsSig: "",
     images: [],
     txs: [],
-    info: { name: "", phone: "", suspects: "", links: "", story: "", ack: "" },
+    info: { name: "", phone: "", suspects: "", links: "", story: "", storyEn: "", ack: "" },
     excerpts: [],
     attest: { called1930: null, submittedPortal: null, contactedBank: null },
   };
@@ -436,6 +438,7 @@ function reduceInner(c: CaseState, a: Action): CaseState {
     case "setUnknown":
       return updateTx(c, a.txId, (t) => setField(t, a.field, { state: "unknown" }));
     case "info": {
+      // storyEn may be longer than the story it translates, so it gets the general text limit.
       const max = a.key === "story" ? LIMITS.story : a.key === "ack" ? LIMITS.ack : LIMITS.text;
       if (a.value.length > 2 * max) return c; // cheap guard before anything else
       return { ...c, info: { ...c.info, [a.key]: [...a.value].slice(0, max).join("") } };

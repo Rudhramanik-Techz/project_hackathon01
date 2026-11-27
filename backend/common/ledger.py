@@ -6,6 +6,7 @@ Rows (no user data, no case data):
   DAY#<UTC>    used 1..cap, expiresAt = day end + 3 d    daily OCR cap
   SEC#<epoch>  used = 1, expiresAt = second + 601 s      at most one admission per server second
   LLMDAY#<UTC> used 1..cap                               daily cap for the optional explanation model
+  TRDAY#<UTC>  used 1..cap                               daily cap for the optional story translation
 
 admit() submits ONE transaction with a fresh private token. Only an acknowledged success authorizes the single
 Textract call. Any unknown outcome raises 503 and authorizes nothing. Nothing is ever refunded or retried.
@@ -81,9 +82,14 @@ class MemoryLedger:
             return Admission(used)
 
     def llm_admit(self, now: float) -> bool:
-        cap = config.llm_daily_cap()
+        return self.daily_admit("LLMDAY", config.llm_daily_cap(), now)
+
+    def translate_admit(self, now: float) -> bool:
+        return self.daily_admit("TRDAY", config.translate_daily_cap(), now)
+
+    def daily_admit(self, prefix: str, cap: int, now: float) -> bool:
         with self._lock:
-            pk = f"LLMDAY#{utc_day(now)}"
+            pk = f"{prefix}#{utc_day(now)}"
             row = self._live(pk, now)
             used = (row["used"] if row else 0) + 1
             if used > cap:
@@ -183,16 +189,22 @@ class DynamoLedger:
         return Admission(used)
 
     def llm_admit(self, now: float) -> bool:
+        return self.daily_admit("LLMDAY", config.llm_daily_cap(), now)
+
+    def translate_admit(self, now: float) -> bool:
+        return self.daily_admit("TRDAY", config.translate_daily_cap(), now)
+
+    def daily_admit(self, prefix: str, cap: int, now: float) -> bool:
         from botocore.exceptions import ClientError
 
         try:
             self._client.update_item(
-                TableName=self.table, Key={"pk": {"S": f"LLMDAY#{utc_day(now)}"}},
+                TableName=self.table, Key={"pk": {"S": f"{prefix}#{utc_day(now)}"}},
                 UpdateExpression="SET #exp = :exp ADD #u :one",
                 ConditionExpression="attribute_not_exists(pk) OR #u < :cap",
                 ExpressionAttributeNames={"#exp": "expiresAt", "#u": "used"},
                 ExpressionAttributeValues={":exp": {"N": str(day_expiry(now))}, ":one": {"N": "1"},
-                                           ":cap": {"N": str(config.llm_daily_cap())}},
+                                           ":cap": {"N": str(cap)}},
             )
             return True
         except ClientError:

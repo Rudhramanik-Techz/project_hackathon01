@@ -1,7 +1,7 @@
 // Golden Hour (v3): call first, type or read screenshots, confirm every field against its source, then one
 // revision-bound pack. OCR only ever proposes; nothing reaches the pack until the person confirms it.
 import { useEffect, useMemo, useRef, useState, type Dispatch } from "react";
-import { postOcr } from "../api";
+import { postOcr, postTranslate } from "../api";
 import {
   type Action,
   asciiDigits,
@@ -508,6 +508,7 @@ function CaseInfo({ c, dispatch }: { c: CaseState; dispatch: Dispatch<Action> })
           {t("fStory")}
           <textarea id="info-story" rows={3} value={c.info.story} onChange={(e) => set("story", e.target.value)} />
         </label>
+        <TranslateStory c={c} dispatch={dispatch} />
         <label>
           {t("fAck")}
           <input id="info-ack" maxLength={64} autoComplete="off" value={c.info.ack} onChange={(e) => set("ack", e.target.value)} />
@@ -528,6 +529,75 @@ function CaseInfo({ c, dispatch }: { c: CaseState; dispatch: Dispatch<Action> })
         )}
       </div>
     </Panel>
+  );
+}
+
+const INDIAN_SCRIPT = /[ऀ-෿]/u; // Devanagari to Malayalam: Hindi, Marathi, Bengali, Tamil, Telugu, Kannada, Malayalam
+
+/**
+ * Optional: an English version of "what happened" for the cybercrime.gov.in complaint, from Amazon Translate.
+ * Sent only after a tick for that one request; the person reads and edits the English before it is used.
+ */
+function TranslateStory({ c, dispatch }: { c: CaseState; dispatch: Dispatch<Action> }) {
+  const t = useT();
+  const story = c.info.story.trim();
+  const english = c.info.storyEn;
+  const [consent, setConsent] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<StringKey | null>(null);
+  const [from, setFrom] = useKept(`trFrom:${c.id}`, ""); // the story text the English was made from
+  const latch = useRef(false);
+  const caseId = useRef(c.id);
+  caseId.current = c.id;
+  const needs = INDIAN_SCRIPT.test(story);
+  if (!needs && !english) return null;
+
+  const run = async () => {
+    if (latch.current || !consent || !story) return;
+    latch.current = true;
+    const startedFor = c.id;
+    setBusy(true);
+    setErr(null);
+    const r = await postTranslate(story);
+    latch.current = false;
+    setBusy(false);
+    setConsent(false); // another request needs a new tick
+    if (startedFor !== caseId.current) return; // the case was cleared meanwhile: drop the result
+    if (!r.ok) return setErr(r.code === "DAILY_LIMIT" ? "trLimit" : "trErr");
+    setFrom(story);
+    dispatch({ type: "info", key: "storyEn", value: r.text });
+  };
+
+  return (
+    <div className="translate" id="translate">
+      {needs && (
+        <>
+          <label className="tick">
+            <input type="checkbox" id="trconsent" checked={consent} disabled={busy} onChange={(e) => setConsent(e.target.checked)} />
+            <span>{t("trConsent")}</span>
+          </label>
+          <div className="row">
+            <button type="button" className="btn sec sm" id="trbtn" disabled={!consent || busy} onClick={() => void run()}>
+              {t(busy ? "trBusy" : english ? "trAgain" : "trButton")}
+            </button>
+          </div>
+          {err && <p role="alert" className="err">{t(err)}</p>}
+        </>
+      )}
+      {english && (
+        <>
+          <label>
+            {t("trResult")}
+            <textarea id="info-storyEn" lang="en" rows={4} value={english} onChange={(e) => dispatch({ type: "info", key: "storyEn", value: e.target.value })} />
+          </label>
+          <small className="muted">{t("trNote")}</small>
+          {from !== "" && from !== story && <p className="warnline" role="status">{t("trStale")}</p>}
+          <button type="button" className="link" id="trremove" onClick={() => (dispatch({ type: "info", key: "storyEn", value: "" }), setFrom(""))}>
+            {t("trRemove")}
+          </button>
+        </>
+      )}
+    </div>
   );
 }
 

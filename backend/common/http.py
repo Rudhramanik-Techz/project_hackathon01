@@ -14,6 +14,7 @@ import uuid
 from dataclasses import dataclass
 from typing import Any, Callable
 
+from common import config
 from common.errors import ApiError, envelope, invalid_request
 from common.log import log_event
 from common.trace import Tracer
@@ -73,6 +74,18 @@ def single_uuid_header(req: Request, name: str) -> str:
     if value is None or "," in value or not UUID4.match(value):
         raise invalid_request()
     return value
+
+
+def browser_origin_ok(req: Request) -> bool:
+    """Browsers must call from this site. A request without Origin is not a cross-site browser call; the
+    ledger still limits what any caller can spend (same-origin delivery is not authentication)."""
+    origin = (req.header("origin") or "").strip().lower().rstrip("/")
+    if not origin:
+        return True
+    if (req.header("sec-fetch-site") or "").strip().lower() == "same-origin":
+        return True
+    host = (req.header("host") or "").strip().lower()
+    return origin == f"https://{host}" or origin in config.allowed_origins()
 
 
 def _response(status: int, payload: dict, request_id: str, extra: dict[str, str] | None = None) -> dict:

@@ -46,7 +46,7 @@ function Policy({ title, paragraphs }: { title: StringKey; paragraphs: StringKey
   );
 }
 
-export const Privacy = () => <Policy title="pPrivacy" paragraphs={["checkLocalNote", "aiPrivacy", "ghPrivacy", "privView", "ticks"]} />;
+export const Privacy = () => <Policy title="pPrivacy" paragraphs={["checkLocalNote", "boloNote", "ghPrivacy", "trPrivacy", "aiPrivacy", "privView", "ticks"]} />;
 export const Disclaimer = () => <Policy title="pDisc" paragraphs={["disc1", "disc2", "disc3"]} />;
 export const Accessibility = () => <Policy title="pAcc" paragraphs={["acc1", "acc2"]} />;
 
