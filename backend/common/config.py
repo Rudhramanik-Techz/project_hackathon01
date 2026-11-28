@@ -53,6 +53,11 @@ def bedrock_model_id() -> str:
     return _env("BEDROCK_MODEL_ID", DEFAULT_MODEL_ID)
 
 
+def allowed_origins() -> set[str]:
+    """Extra browser origins allowed to call paid routes (e.g. the CloudFront domain), comma-separated."""
+    return {o.strip().lower().rstrip('/') for o in _env('ALLOWED_ORIGINS', '').split(',') if o.strip()}
+
+
 def table_name() -> str:
     return _env("TABLE_NAME", "asli-ledger")
 
@@ -68,6 +73,15 @@ def build_id() -> str:
 
 def llm_daily_cap() -> int:
     return _env_int("LLM_DAILY_CAP", 100)
+
+
+def translate_daily_cap() -> int:
+    return _env_int("TRANSLATE_DAILY_CAP", 300)
+
+
+def translate_provider() -> str:
+    """off | mock | aws. mock (local default) returns a marked fake translation; AWS uses Amazon Translate."""
+    return _env("TRANSLATE_PROVIDER", "mock")
 
 
 def ocr_daily_cap() -> int:

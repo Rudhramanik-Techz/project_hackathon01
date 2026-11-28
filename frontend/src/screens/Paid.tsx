@@ -1,39 +1,49 @@
 // Golden Hour (v3): call first, type or read screenshots, confirm every field against its source, then one
 // revision-bound pack. OCR only ever proposes; nothing reaches the pack until the person confirms it.
-import { useEffect, useMemo, useRef, useState, type Dispatch, type ReactNode } from "react";
-import { postOcr } from "../api";
+import { useEffect, useMemo, useRef, useState, type Dispatch } from "react";
+import { postOcr, postTranslate } from "../api";
 import {
   type Action,
+  asciiDigits,
   type AttestKey,
   type CaseState,
   FIELD_ORDER,
   type FieldName,
+  facts,
+  hasDraft,
   type ImageRec,
   LIMITS,
   type Transaction,
-  facts,
   toInput,
   unresolvedCount,
 } from "../case/model";
 import { CopyButton } from "../components/CopyButton";
 import { Crop } from "../components/Crop";
 import { EvidenceDrawer } from "../components/EvidenceDrawer";
-import { AlertIcon, BeakerIcon, ClockIcon, ExternalIcon, LockIcon, MailIcon, PhoneIcon, UploadIcon } from "../components/Icons";
-import { isStringKey, useLang, useT, type Lang, type StringKey } from "../i18n";
+import { PackSheet, PrintPortal, usePrintPack } from "../components/PackSheet";
+import { dateLocale, isStringKey, type Lang, type StringKey, type Translate, useLang, useT } from "../i18n";
+import { saveFile } from "../lib/files";
 import { formatIst, formatPaise, minutesSince, spaceDigits, splitList } from "../lib/format";
+import { reminderIcs } from "../lib/ics";
 import { ImageError, prepareImage } from "../lib/image";
+import { useKept, usePlace } from "../lib/session";
 import { buildBankEmail } from "../pack/email";
 import { buildNcrpCards } from "../pack/ncrp";
+import { buildSheet, sheetTitle } from "../pack/sheet";
 import { build1930Script } from "../pack/script";
+import type { Actions } from "../routes";
+import { Ext, Panel } from "../ui/bits";
+import { ReadButton } from "../ui/ReadButton";
+import { toast } from "../ui/toast";
 
 const PACE_MS = 1100; // gap between distinct images after a response, so one tab never hits the 1/s bucket
-const INPUT = "mt-1 min-h-12 w-full rounded-lg border border-slate-300 px-3 text-base";
 const ENUMS: Partial<Record<FieldName, string[]>> = {
   direction: ["outgoing", "incoming"],
   paymentStatus: ["completed", "pending", "failed", "reversed"],
 };
 const ENUM_PREFIX: Partial<Record<FieldName, string>> = { direction: "dir_", paymentStatus: "st_" };
-const SECONDARY: FieldName[] = ["bankRef", "senderVpa"];
+const SECTIONS: [string, StringKey][] = [["secU", "uploadTitle"], ["secA", "secA"], ["secB", "secB"], ["secC", "secC"], ["secD", "secD"], ["secE", "secE"]];
+const OPEN_STATES = ["proposed", "editing", "empty"];
 
 function useNow(fixed: string | null): number {
   const [now, setNow] = useState(() => (fixed ? Date.parse(fixed) : Date.now()));
@@ -45,11 +55,11 @@ function useNow(fixed: string | null): number {
   return now;
 }
 
-function display(field: FieldName, value: string, t: (k: StringKey) => string, lang: Lang): string {
+function display(field: FieldName, value: string, t: Translate, lang: Lang): string {
   if (field === "amountPaise") return formatPaise(BigInt(value));
   if (field === "upiRef") return spaceDigits(value);
   if (field === "occurredAt") {
-    const { date, time } = formatIst(value, lang === "en" ? "en-IN" : `${lang}-IN`, lang === "en");
+    const { date, time } = formatIst(value, dateLocale(lang), lang === "en");
     return `${date}, ${time}`;
   }
   const key = `${ENUM_PREFIX[field] ?? ""}${value}`;
@@ -58,11 +68,65 @@ function display(field: FieldName, value: string, t: (k: StringKey) => string, l
 
 // ------------------------------------------------------------------------------------------------ screen
 
-export function Paid({ c, dispatch }: { c: CaseState; dispatch: Dispatch<Action> }) {
+export function Paid({ c, dispatch, lost, actions }: { c: CaseState; dispatch: Dispatch<Action>; lost: boolean; actions: Actions }) {
   const t = useT();
   const controllers = useRef(new Map<string, AbortController>());
   const latch = useRef(new Set<string>());
   const lastResponse = useRef(0);
+  const now = useNow(c.scenarioClock);
+  // One payment is shown at a time. The choice follows the payment, not its position.
+  const [picked, setPicked] = useKept<string | null>(`tx:${c.id}`, null);
+  const tx = c.txs.find((x) => x.id === picked) ?? c.txs[0];
+  const jumpTo = useRef<string | null>(null);
+  const lastJump = useRef<{ txId: string; f: string } | null>(null);
+  const addedTx = useRef(false);
+  const sentImage = useRef<string | null>(null);
+
+  // After "next unchecked detail" switches payment, bring that row into view.
+  useEffect(() => {
+    if (!jumpTo.current) return;
+    const row = document.getElementById(`row-${jumpTo.current}`);
+    jumpTo.current = null;
+    row?.scrollIntoView({ block: "center" });
+    row?.focus({ preventScroll: true });
+  });
+  // A newly added payment, or the one a screenshot was just read into, becomes the shown one.
+  useEffect(() => {
+    if (addedTx.current) {
+      addedTx.current = false;
+      setPicked(c.txs[c.txs.length - 1]?.id ?? null);
+      return;
+    }
+    const img = c.images.find((i) => i.id === sentImage.current);
+    if (!img || img.state === "sending") return;
+    sentImage.current = null;
+    if (img.state === "reviewable") setPicked(c.txs.find((x) => x.imageIds.includes(img.id))?.id ?? null);
+  }, [c.txs, c.images, setPicked]);
+
+  // Every unchecked detail, payment by payment, in field order. "Next"/"Previous" step through it from the
+  // detail that has focus, wrapping around.
+  const stepUnchecked = (dir: 1 | -1) => {
+    const list = c.txs.flatMap((x) => FIELD_ORDER.filter((f) => OPEN_STATES.includes(x.fields[f].state)).map((f) => ({ x, f })));
+    if (!list.length) return;
+    // Where we are: the detail that has focus, or else the one the last jump went to (clicking this button
+    // moves focus onto the button itself).
+    const focused = document.activeElement?.closest<HTMLElement>(".field")?.id.replace(/^row-/, "");
+    const from = focused && tx ? { txId: tx.id, f: focused } : lastJump.current;
+    const at = from ? list.findIndex(({ x, f }) => x.id === from.txId && f === from.f) : -1;
+    // With nothing focused, start inside the payment being shown.
+    const first = list.findIndex(({ x }) => x.id === tx?.id);
+    const here = at >= 0 ? at : dir === 1 ? (first >= 0 ? first - 1 : -1) : first >= 0 ? first + 1 : list.length;
+    const { x: target, f: field } = list[(here + dir + list.length) % list.length]!;
+    lastJump.current = { txId: target.id, f: field };
+    jumpTo.current = field;
+    setPicked(target.id);
+    if (target.id === tx?.id) {
+      const row = document.getElementById(`row-${field}`);
+      row?.scrollIntoView({ block: "center" });
+      row?.focus({ preventScroll: true });
+      jumpTo.current = null;
+    }
+  };
 
   // Leaving the screen or hiding the tab revokes ownership of pending reads; nothing restarts by itself.
   useEffect(() => {
@@ -90,6 +154,7 @@ export function Paid({ c, dispatch }: { c: CaseState; dispatch: Dispatch<Action>
     const key = crypto.randomUUID();
     const ctrl = new AbortController();
     controllers.current.set(img.id, ctrl);
+    sentImage.current = img.id;
     dispatch({ type: "sending", generation, imageId: img.id, attemptId: key });
     try {
       const wait = lastResponse.current + PACE_MS - Date.now();
@@ -105,106 +170,106 @@ export function Paid({ c, dispatch }: { c: CaseState; dispatch: Dispatch<Action>
     }
   };
 
+  const total = FIELD_ORDER.length * c.txs.length;
+  const confirmed = c.txs.reduce((n, x) => n + FIELD_ORDER.filter((f) => x.fields[f].state === "confirmed").length, 0);
+  const pending = unresolvedCount(c);
+  const elapsed = facts(c).txs.flatMap((x, i) => {
+    const m = x.occurredAt && x.direction === "outgoing" ? minutesSince(x.occurredAt, now) : null;
+    return m === null ? [] : [{ id: x.id, i: i + 1, m }];
+  });
+  const replaceAllowed = () => !(hasDraft(c) || c.origin === "synthetic") || window.confirm(t("clearConfirm"));
+
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
+    <>
+      <h1>{t("alreadyPaid")}</h1>
+      <div className="callbar">
         <div>
-          {c.origin === "synthetic" && (
-            <p className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-violet-100 px-3 py-1 text-xs font-semibold text-violet-900">
-              <BeakerIcon size={14} />{t("syntheticBanner")}
-            </p>
-          )}
-          <h1 className="text-2xl font-bold sm:text-3xl">{t("ghTitle")}</h1>
-          <p className="mt-1 text-slate-600">{t("callFirst")}</p>
+          <strong>{t("callFirst")}</strong>
+          {c.origin === "synthetic" && (<><br /><small>{t("syntheticBanner")}</small></>)}
         </div>
-        <button type="button"
-          onClick={() => window.confirm(t("clearConfirm")) && dispatch({ type: "reset", origin: "personal" })}
-          className="min-h-10 rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold">
-          {t("clearCase")}
-        </button>
+        <a className="btn red" href="tel:1930">{t("call1930")}</a>
       </div>
-
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,27rem)] xl:grid-cols-[minmax(0,1fr)_minmax(0,32rem)] xl:gap-8 lg:items-start">
-        <div className="flex min-w-0 flex-col gap-6">
-          <CallCard className="lg:hidden" />
-          <Payments c={c} dispatch={dispatch} />
-          <Uploads c={c} dispatch={dispatch} onRead={read} />
-          <CaseInfo c={c} dispatch={dispatch} />
+      {lost && <div className="notice" role="status">{t("lost")}</div>}
+      {elapsed.length > 0 && (
+        <div className="notice">
+          {elapsed.map((e) => (<p key={e.id}><b>{t("elapsed", { i: e.i, m: e.m })}</b></p>))}
+          <span>{t("elapsedHint")}</span>
         </div>
-        {/* Live pack: sticky beside the form on desktop, so every confirmation visibly updates it. */}
-        <aside className="flex min-w-0 flex-col gap-4 lg:sticky lg:top-20 lg:max-h-[calc(100dvh-6rem)] lg:overflow-y-auto lg:pb-2 lg:pr-1">
-          <CallCard className="hidden lg:block" />
-          <PackView c={c} dispatch={dispatch} />
+      )}
+      <div className="layout rev">
+        <aside className="side">
+          <div className="panel pad" id="progress">
+            <b>{t("progress", { a: confirmed, b: total })}</b>
+            <progress max={total || 1} value={confirmed} />
+            {pending > 0 && <p className="warnline">{t("unresolved", { n: pending })}</p>}
+            <div className="row">
+              <button type="button" className="btn sec sm" id="prevu" disabled={!c.txs.length} onClick={() => stepUnchecked(-1)}>{t("prevU")}</button>
+              <button type="button" className="btn sec sm" id="nextu" disabled={!c.txs.length} onClick={() => stepUnchecked(1)}>{t("nextU")}</button>
+            </div>
+          </div>
+          <ol className="panel toc">
+            {SECTIONS.map(([id, label]) => (
+              <li key={id}><button type="button" className="link" onClick={() => document.getElementById(id)?.scrollIntoView()}>{t(label)}</button></li>
+            ))}
+          </ol>
+          <div className="row">
+            <button type="button" className="btn sec sm" id="reset" onClick={() => replaceAllowed() && dispatch({ type: "reset", origin: "personal" })}>{t("clearCase")}</button>
+            <button type="button" className="btn sec sm" id="loadexample" onClick={() => actions.openSeed("A")}>{t("loadEx")}</button>
+          </div>
         </aside>
+        <div>
+          <Uploads c={c} dispatch={dispatch} onRead={read} />
+          <Panel title={t("secA")} id="secA">
+            <div className="paytabs">
+              {c.txs.map((x, i) => (
+                <button key={x.id} type="button" className={`btn sm ${x.id === tx?.id ? "" : "sec"}`} id={`pay-${i}`} aria-pressed={x.id === tx?.id} onClick={() => setPicked(x.id)}>
+                  {t("txN", { n: i + 1 })}
+                </button>
+              ))}
+              <button type="button" className="btn sec sm" id="addtx" disabled={c.txs.length >= LIMITS.txs}
+                onClick={() => ((addedTx.current = true), dispatch({ type: "addTx" }))}>
+                + {t("addTx")}
+              </button>
+              {tx && (
+                <button type="button" className="btn sec sm" id="removetx"
+                  onClick={() => {
+                    if (FIELD_ORDER.some((f) => tx.fields[f].state !== "empty") && !window.confirm(`${t("removeTx")}?`)) return;
+                    dispatch({ type: "removeTx", txId: tx.id });
+                  }}>
+                  {t("removeTx")}
+                </button>
+              )}
+            </div>
+            {tx && <LinkShots tx={tx} c={c} dispatch={dispatch} />}
+            {tx ? FIELD_ORDER.map((f) => <FieldRow key={`${tx.id}-${f}`} tx={tx} field={f} c={c} dispatch={dispatch} />) : <p className="pad">{t("noPayments")}</p>}
+          </Panel>
+          <CaseInfo c={c} dispatch={dispatch} />
+          <Outputs c={c} />
+          <Attest c={c} dispatch={dispatch} />
+          <Reminder />
+          <Evidence key={c.id} caseId={c.id} />
+        </div>
       </div>
-    </div>
-  );
-}
-
-function CallCard({ className = "" }: { className?: string }) {
-  const t = useT();
-  return (
-    <section className={`rounded-xl bg-red-700 p-4 text-white ${className}`}>
-      <a href="tel:1930" className="flex min-h-14 items-center justify-center gap-2 rounded-lg bg-white text-lg font-bold text-red-800">
-        <PhoneIcon />{t("call1930")}
-      </a>
-      <a href="https://cybercrime.gov.in" target="_blank" rel="noreferrer noopener"
-        className="mt-2 flex items-center justify-center gap-1.5 text-sm text-white underline">
-        {t("ncrpOpen")}<ExternalIcon size={14} />
-      </a>
-    </section>
+    </>
   );
 }
 
 // ---------------------------------------------------------------------------------------------- payments
 
-function Payments({ c, dispatch }: { c: CaseState; dispatch: Dispatch<Action> }) {
+/** A screenshot read for one payment can also supply readings for another (e.g. two payments on one screen). */
+function LinkShots({ tx, c, dispatch }: { tx: Transaction; c: CaseState; dispatch: Dispatch<Action> }) {
   const t = useT();
-  const now = useNow(c.scenarioClock);
-  const pending = unresolvedCount(c);
+  const unlinked = c.images.filter((i) => i.candidates.length > 0 && !tx.imageIds.includes(i.id));
+  if (!unlinked.length) return null;
   return (
-    <section aria-labelledby="payments-h" className="flex flex-col gap-3">
-      <div className="flex items-baseline justify-between">
-        <h2 id="payments-h" className="text-xl font-bold">{t("paymentsTitle")}</h2>
-        {pending > 0 && <span className="rounded bg-amber-100 px-2 py-0.5 text-sm text-amber-900">{t("unresolved", { n: pending })}</span>}
-      </div>
-      {c.txs.length === 0 && <p className="text-slate-600">{t("noPayments")}</p>}
-      {c.txs.map((tx, i) => (
-        <PaymentCard key={tx.id} tx={tx} index={i} c={c} dispatch={dispatch} now={now} />
+    <div className="pad other" id="linkshots">
+      {t("linkShot")}:{" "}
+      {unlinked.map((i) => (
+        <button key={i.id} type="button" className="btn sec sm" onClick={() => dispatch({ type: "linkImage", txId: tx.id, imageId: i.id })}>
+          {i.name}
+        </button>
       ))}
-      {c.txs.length < LIMITS.txs && (
-        <button type="button" onClick={() => dispatch({ type: "addTx" })}
-          className="min-h-12 rounded-xl border-2 border-dashed border-slate-400 bg-white font-semibold">
-          + {t("addTx")}
-        </button>
-      )}
-    </section>
-  );
-}
-
-function PaymentCard({ tx, index, c, dispatch, now }: { tx: Transaction; index: number; c: CaseState; dispatch: Dispatch<Action>; now: number }) {
-  const t = useT();
-  const when = tx.fields.occurredAt;
-  const mins = when.state === "confirmed" ? minutesSince(when.value, now) : null;
-  const [more, setMore] = useState(false);
-  return (
-    <article className="rounded-2xl border border-slate-200 bg-white p-4" aria-label={t("txN", { n: index + 1 })}>
-      <header className="flex items-center justify-between gap-2">
-        <h3 className="text-lg font-bold">{t("txN", { n: index + 1 })}</h3>
-        {mins != null && <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2.5 py-0.5 text-sm font-semibold text-red-800"><ClockIcon size={14} />{t("elapsed", { i: index + 1, m: mins })}</span>}
-      </header>
-      {FIELD_ORDER.filter((f) => more || !SECONDARY.includes(f)).map((f) => (
-        <FieldRow key={f} tx={tx} field={f} c={c} dispatch={dispatch} />
-      ))}
-      <div className="mt-3 flex flex-wrap justify-between gap-2">
-        <button type="button" onClick={() => setMore(!more)} className="text-sm font-semibold text-sky-800 underline">
-          {more ? "−" : "+"} {t("f_bankRef")} / {t("f_senderVpa")}
-        </button>
-        <button type="button" onClick={() => dispatch({ type: "removeTx", txId: tx.id })} className="text-sm font-semibold text-red-700 underline">
-          {t("removeTx")}
-        </button>
-      </div>
-    </article>
+    </div>
   );
 }
 
@@ -212,60 +277,53 @@ function FieldRow({ tx, field, c, dispatch }: { tx: Transaction; field: FieldNam
   const t = useT();
   const lang = useLang();
   const f = tx.fields[field];
+  const [zoom, setZoom] = useState(false);
   const label = t(`f_${field}` as StringKey);
   const options = ENUMS[field];
   const source = "source" in f ? f.source : null;
   const img = source ? c.images.find((i) => i.id === source.imageId) : null;
-  const usedIds = new Set(
-    c.txs.flatMap((x) => FIELD_ORDER.map((k) => x.fields[k]).flatMap((v) => ("source" in v && v.source ? [`${v.source.imageId}/${v.source.candidateId}`] : []))),
+  // Where each reading is used now (payment number), so moving one is an explicit, visible choice.
+  const usedIn = new Map<string, number>();
+  c.txs.forEach((x, n) =>
+    FIELD_ORDER.forEach((k) => {
+      const v = x.fields[k];
+      if ("source" in v && v.source) usedIn.set(`${v.source.imageId}/${v.source.candidateId}`, n + 1);
+    }),
   );
+  const mine = source ? `${source.imageId}/${source.candidateId}` : "";
   const others = c.images
     .filter((i) => tx.imageIds.includes(i.id))
-    .flatMap((i) => i.candidates.filter((k) => k.field === field && !usedIds.has(`${i.id}/${k.id}`)).map((k) => ({ img: i, k })));
+    .flatMap((i) => i.candidates.filter((k) => k.field === field && `${i.id}/${k.id}` !== mine).map((k) => ({ img: i, k, n: usedIn.get(`${i.id}/${k.id}`) })));
   const choose = (value: string) => {
     dispatch({ type: "edit", txId: tx.id, field, text: value });
     dispatch({ type: "confirmEdit", txId: tx.id, field });
   };
-  const status =
-    f.state === "proposed" ? t("fs_proposed") : f.state === "confirmed" ? t(`fs_${f.method}` as StringKey) : f.state === "unknown" ? t("fs_unknown") : f.state === "editing" ? t("fs_editing") : "";
-  const tone =
-    f.state === "proposed" ? "border-amber-400 bg-amber-50" : f.state === "confirmed" ? "border-emerald-300 bg-emerald-50/50" : f.state === "editing" ? "border-sky-400 bg-sky-50" : "border-slate-200";
+  const status: StringKey | null =
+    f.state === "proposed" ? "fs_proposed" : f.state === "confirmed" ? (`fs_${f.method}` as StringKey) : f.state === "unknown" ? "fs_unknown" : f.state === "editing" ? "fs_editing" : null;
 
   return (
-    <div className={`mt-3 rounded-xl border p-3 ${tone}`}>
-      <div className="flex flex-wrap items-baseline justify-between gap-1">
-        <span className="text-sm font-semibold text-slate-700">{label}</span>
-        {status && <span className="text-xs text-slate-600">{status}</span>}
-      </div>
+    <div className="field" id={`row-${field}`} tabIndex={-1} data-state={f.state}>
+      <h3>
+        {label}
+        {status && (<><br /><span className={`tag ${f.state === "confirmed" ? "c" : f.state === "proposed" ? "p" : "e"}`}>{f.state === "confirmed" ? "✓ " : ""}{t(status)}</span></>)}
+      </h3>
+      <div>
+        {(f.state === "proposed" || f.state === "confirmed") && <div className="val">{display(field, f.value, t, lang)}</div>}
 
-      {(f.state === "proposed" || f.state === "confirmed") && (
-        <p className={`mt-1 text-xl font-bold tabular-nums ${field === "upiRef" || field === "bankRef" ? "break-all" : "break-words"}`}>{display(field, f.value, t, lang)}</p>
-      )}
-      {source && img && f.state !== "editing" && (
-        <>
-          <Crop url={img.url} width={img.width} height={img.height} box={source.box} label={`${label}: ${source.raw}`} />
-          <p className="mt-1 text-xs text-slate-600">
-            “{source.raw}”{source.label ? ` · ${source.label}` : ""}
-            {source.confidenceBp < 9000 ? ` · ⚠ ${t("hardToRead")}` : ""}
-          </p>
-        </>
-      )}
-
-      {f.state === "editing" && (
-        <div className="mt-1">
-          {options ? (
-            <div className="flex flex-wrap gap-2">
+        {f.state === "editing" &&
+          (options ? (
+            <div className="row">
               {options.map((o) => (
-                <button key={o} type="button" onClick={() => choose(o)} className="min-h-11 rounded-lg border border-slate-300 bg-white px-3">
-                  {t(`${ENUM_PREFIX[field]}${o}` as StringKey)}
-                </button>
+                <button key={o} type="button" className="btn sec sm" data-option={o} onClick={() => choose(o)}>{t(`${ENUM_PREFIX[field]}${o}` as StringKey)}</button>
               ))}
             </div>
           ) : (
             <input
+              id={`in-${field}`}
               aria-label={label}
               type={field === "occurredAt" ? "datetime-local" : "text"}
               inputMode={field === "amountPaise" ? "decimal" : field === "upiRef" ? "numeric" : undefined}
+              autoComplete="off"
               autoCapitalize="off"
               autoCorrect="off"
               spellCheck={false}
@@ -274,56 +332,54 @@ function FieldRow({ tx, field, c, dispatch }: { tx: Transaction; field: FieldNam
               onKeyDown={(e) => e.key === "Enter" && dispatch({ type: "confirmEdit", txId: tx.id, field })}
               aria-invalid={!!f.error}
               aria-describedby={f.error ? `${tx.id}-${field}-err` : undefined}
-              className={INPUT}
               autoFocus
             />
-          )}
-          {f.error && (
-            <p id={`${tx.id}-${field}-err`} role="alert" className="mt-1 text-sm text-red-700">
-              {isStringKey(f.error) ? t(f.error) : f.error}
+          ))}
+        {f.state === "editing" && f.error && (
+          <p id={`${tx.id}-${field}-err`} role="alert" className="err">{isStringKey(f.error) ? t(f.error) : f.error}</p>
+        )}
+
+        {source && img && f.state !== "editing" && (
+          <>
+            <Crop url={img.url} width={img.width} height={img.height} box={source.box} label={`${label}: ${source.raw}`} big={zoom} />
+            <button type="button" className="link" aria-pressed={zoom} onClick={() => setZoom(!zoom)}>{t(zoom ? "zoomOut" : "zoomIn")}</button>
+            <p className="srcline">
+              “{source.raw}”{source.label ? ` · ${source.label}` : ""}
+              {source.confidenceBp < 9000 ? ` · ⚠ ${t("hardToRead")}` : ""}
             </p>
-          )}
-        </div>
-      )}
-
-      <div className="mt-2 flex flex-wrap gap-2">
-        {f.state === "proposed" && <Btn primary onClick={() => dispatch({ type: "accept", txId: tx.id, field })}>✓ {t("accept")}</Btn>}
-        {f.state === "editing" && !options && <Btn primary onClick={() => dispatch({ type: "confirmEdit", txId: tx.id, field })}>{t("confirm")}</Btn>}
-        {f.state === "editing" && <Btn onClick={() => dispatch({ type: "cancelEdit", txId: tx.id, field })}>{t("cancel")}</Btn>}
-        {(f.state === "proposed" || f.state === "confirmed") && (
-          <Btn onClick={() => dispatch({ type: "edit", txId: tx.id, field, text: toInput(field, f.value) })}>{t("edit")}</Btn>
+          </>
         )}
-        {(f.state === "empty" || f.state === "unknown") && <Btn onClick={() => dispatch({ type: "edit", txId: tx.id, field, text: "" })}>{t("typeIt")}</Btn>}
-        {f.state !== "unknown" && f.state !== "editing" && f.state !== "confirmed" && (
-          <Btn onClick={() => dispatch({ type: "setUnknown", txId: tx.id, field })}>{t("dontKnow")}</Btn>
-        )}
-      </div>
 
-      {others.length > 0 && f.state !== "editing" && (
-        <div className="mt-2">
-          <p className="text-xs text-slate-600">{t("otherReadings")}:</p>
-          <div className="mt-1 flex flex-wrap gap-2">
-            {others.map(({ img: i, k }) => (
-              <button key={`${i.id}/${k.id}`} type="button"
-                onClick={() => dispatch({ type: "propose", txId: tx.id, field, candidate: k, imageId: i.id })}
-                className="min-h-10 rounded-lg border border-slate-300 bg-white px-2 text-sm">
+        {others.length > 0 && f.state !== "editing" && (
+          <div className="other">
+            {t("otherReadings")}:{" "}
+            {others.map(({ img: i, k, n }) => (
+              <button key={`${i.id}/${k.id}`} type="button" className="btn sec sm"
+                onClick={() => (n === undefined || window.confirm(t("moveReading", { n }))) && dispatch({ type: "propose", txId: tx.id, field, candidate: k, imageId: i.id })}>
                 {display(field, k.value, t, lang)}
-                {k.label ? <span className="text-slate-500"> · {k.label}</span> : null}
+                {k.label ? ` (${k.label})` : ""}
+                {n !== undefined ? ` · ${t("usedInTx", { n })}` : ""}
               </button>
             ))}
           </div>
-        </div>
-      )}
-    </div>
-  );
-}
+        )}
+      </div>
 
-function Btn({ children, onClick, primary = false }: { children: ReactNode; onClick: () => void; primary?: boolean }) {
-  return (
-    <button type="button" onClick={onClick}
-      className={`min-h-11 rounded-lg px-3 font-semibold ${primary ? "bg-emerald-700 text-white" : "border border-slate-300 bg-white text-slate-800"}`}>
-      {children}
-    </button>
+      <div className="row end">
+        {f.state === "proposed" && <button type="button" className="btn sm" data-ok={field} onClick={() => dispatch({ type: "accept", txId: tx.id, field })}>{t("accept")}</button>}
+        {f.state === "editing" && !options && <button type="button" className="btn sm" data-save={field} onClick={() => dispatch({ type: "confirmEdit", txId: tx.id, field })}>{t("confirm")}</button>}
+        {f.state === "editing" && <button type="button" className="btn sec sm" onClick={() => dispatch({ type: "cancelEdit", txId: tx.id, field })}>{t("cancel")}</button>}
+        {f.state !== "editing" && (
+          <button type="button" className="btn sec sm" data-start={field}
+            onClick={() => dispatch({ type: "edit", txId: tx.id, field, text: f.state === "proposed" || f.state === "confirmed" ? toInput(field, f.value) : "" })}>
+            {t(f.state === "empty" || f.state === "unknown" ? "typeIt" : "edit")}
+          </button>
+        )}
+        {(f.state === "empty" || f.state === "proposed") && (
+          <button type="button" className="btn sec sm" data-unknown={field} onClick={() => dispatch({ type: "setUnknown", txId: tx.id, field })}>{t("dontKnow")}</button>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -366,194 +422,351 @@ function Uploads({ c, dispatch, onRead }: { c: CaseState; dispatch: Dispatch<Act
   };
 
   return (
-    <section aria-labelledby="upload-h" className="rounded-2xl border border-slate-200 bg-white p-4">
-      <h2 id="upload-h" className="text-lg font-bold">{t("uploadTitle")}</h2>
-      <p className="mt-1 text-sm text-slate-600">{t("uploadIntro")}</p>
-      {c.images.length < LIMITS.images && (
-        <label className="mt-3 flex min-h-16 cursor-pointer items-center justify-center rounded-xl border-2 border-dashed border-slate-400 p-3 font-semibold">
-          {busy ? "…" : <span className="flex items-center gap-2"><UploadIcon />{t("ghPick")}</span>}
-          <input type="file" accept="image/png,image/jpeg,image/webp" multiple className="sr-only" disabled={busy}
-            onChange={(e) => {
-              const files = Array.from(e.target.files ?? []);
-              e.target.value = "";
-              void pick(files);
-            }} />
-        </label>
-      )}
-      <p className="mt-2 flex items-start gap-1.5 text-xs text-slate-600"><LockIcon size={14} className="mt-0.5 shrink-0" />{t("ghPrivacy")}</p>
-      {dark && <p className="mt-1 text-sm text-amber-800">{t("ghDarkImage")}</p>}
-      {errors.map((e) => (
-        <p key={e} role="alert" className="mt-1 text-sm text-red-700">{e}</p>
-      ))}
+    <Panel title={t("uploadTitle")} id="secU">
+      <div className="pad">
+        <p>{t("uploadIntro")}</p>
+        {c.images.length < LIMITS.images && (
+          <label className="drop">
+            {busy ? "…" : <span>{t("ghPick")}</span>}
+            <input type="file" accept="image/png,image/jpeg,image/webp" multiple className="vh" disabled={busy}
+              onChange={(e) => {
+                const files = Array.from(e.target.files ?? []);
+                e.target.value = "";
+                void pick(files);
+              }} />
+          </label>
+        )}
+        <p className="muted">{t("ghPrivacy")}</p>
+        {dark && <p className="warnline">{t("ghDarkImage")}</p>}
+        {errors.map((e) => (
+          <p key={e} role="alert" className="err">{e}</p>
+        ))}
 
-      {c.images.map((img) => (
-        <div key={img.id} className="mt-4 rounded-xl border border-slate-200 p-3">
-          <div className="flex gap-3">
-            <img src={img.url} alt={img.name} className="h-28 w-auto rounded border border-slate-200 object-contain" />
-            <div className="min-w-0 flex-1 text-sm">
-              <p className="truncate font-semibold">{img.name}</p>
-              <p className="text-slate-500">{img.width}×{img.height} · {Math.round(img.blob.size / 1024)} KB JPEG</p>
-              <p className="mt-1" aria-live="polite">
-                {img.state === "ready" ? "" : img.state === "unavailable" ? errText(img.error) : t(`img_${img.state}` as StringKey)}
-              </p>
+        {c.images.map((img) => (
+          <div key={img.id} className="shot">
+            <div className="shothead">
+              <img src={img.url} alt={img.name} />
+              <div>
+                <p><b>{img.name}</b></p>
+                <p className="muted">{img.width}×{img.height} · {Math.round(img.blob.size / 1024)} KB JPEG</p>
+                <p aria-live="polite">
+                  {img.state === "ready"
+                    ? ""
+                    : img.state === "unavailable"
+                      ? errText(img.error)
+                      : img.error === "EMPTY_REREAD"
+                        ? t("img_reread_empty")
+                        : t(`img_${img.state}` as StringKey)}
+                </p>
+              </div>
             </div>
-          </div>
-          {img.state !== "sending" && (
-            <label className="mt-2 flex min-h-11 items-center gap-2 text-sm">
-              <input type="checkbox" className="h-5 w-5" checked={img.consent}
-                onChange={(e) => dispatch({ type: "consent", imageId: img.id, value: e.target.checked })} />
-              {t("consentLabel")}
-            </label>
-          )}
-          <div className="mt-2 flex flex-wrap gap-2">
             {img.state !== "sending" && (
-              <button type="button" disabled={!img.consent} onClick={() => onRead(img)}
-                className="min-h-11 rounded-lg bg-amber-500 px-3 font-bold text-slate-950 disabled:opacity-40">
-                {img.extraction === "precomputed" ? t("runLive") : t("readImage")}
-              </button>
+              <label className="tick">
+                <input type="checkbox" checked={img.consent} onChange={(e) => dispatch({ type: "consent", imageId: img.id, value: e.target.checked })} />
+                <span>{t("consentLabel")}</span>
+              </label>
             )}
-            <button type="button" onClick={() => dispatch({ type: "removeImage", imageId: img.id })}
-              className="min-h-11 rounded-lg border border-slate-300 px-3">
-              {t("removeImage")}
-            </button>
+            <div className="row">
+              {img.state !== "sending" && (
+                <button type="button" className="btn gold sm" disabled={!img.consent} onClick={() => onRead(img)}>
+                  {img.extraction === "precomputed" ? t("runLive") : t("readImage")}
+                </button>
+              )}
+              <button type="button" className="btn sec sm" onClick={() => dispatch({ type: "removeImage", imageId: img.id })}>{t("removeImage")}</button>
+            </div>
+            {img.extraction && <EvidenceDrawer image={img} origin={c.origin} />}
           </div>
-          {img.extraction && <EvidenceDrawer image={img} origin={c.origin} />}
-        </div>
-      ))}
-    </section>
+        ))}
+      </div>
+    </Panel>
   );
 }
 
 // ------------------------------------------------------------------------------------------------- info
 
+const INFO: [keyof CaseState["info"], StringKey, "text" | "tel" | "url"][] = [
+  ["name", "fName", "text"],
+  ["phone", "fPhone", "tel"],
+  ["suspects", "fSuspects", "tel"],
+  ["links", "fLinks", "url"],
+];
+const DIGIT_KEYS = ["phone", "suspects", "ack"];
+
 function CaseInfo({ c, dispatch }: { c: CaseState; dispatch: Dispatch<Action> }) {
   const t = useT();
-  const fields: [keyof CaseState["info"], StringKey, string][] = [
-    ["name", "fName", "text"],
-    ["phone", "fPhone", "tel"],
-    ["suspects", "fSuspects", "text"],
-    ["links", "fLinks", "text"],
-  ];
+  const set = (key: keyof CaseState["info"], value: string) => dispatch({ type: "info", key, value: DIGIT_KEYS.includes(key) ? asciiDigits(value) : value });
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-4">
-      <h2 className="text-lg font-bold">{t("caseTitle")}</h2>
-      {fields.map(([key, label, type]) => (
-        <label key={key} className="mt-3 block">
-          <span className="text-sm font-medium text-slate-700">{t(label)}</span>
-          <input type={type} value={c.info[key]} onChange={(e) => dispatch({ type: "info", key, value: e.target.value })} className={INPUT} />
+    <Panel title={t("secB")} id="secB">
+      <div className="pad form">
+        {INFO.map(([key, label, mode]) => (
+          <label key={key}>
+            {t(label)}
+            <input id={`info-${key}`} inputMode={mode} autoComplete="off" value={c.info[key]} onChange={(e) => set(key, e.target.value)} />
+          </label>
+        ))}
+        <label>
+          {t("fStory")}
+          <textarea id="info-story" rows={3} value={c.info.story} onChange={(e) => set("story", e.target.value)} />
         </label>
-      ))}
-      <label className="mt-3 block">
-        <span className="text-sm font-medium text-slate-700">{t("fStory")}</span>
-        <textarea rows={3} value={c.info.story} onChange={(e) => dispatch({ type: "info", key: "story", value: e.target.value })} className={INPUT} />
-      </label>
-      {c.info.evidence && (
-        <label className="mt-3 block">
-          <span className="text-sm font-medium text-slate-700">{t("fEvidence")}</span>
-          <textarea rows={3} value={c.info.evidence} onChange={(e) => dispatch({ type: "info", key: "evidence", value: e.target.value })} className={INPUT} />
+        <TranslateStory c={c} dispatch={dispatch} />
+        <label>
+          {t("fAck")}
+          <input id="info-ack" maxLength={64} autoComplete="off" value={c.info.ack} onChange={(e) => set("ack", e.target.value)} />
         </label>
+        <small>{t("fAckHelp")}</small>
+        {c.excerpts.length > 0 && (
+          <div id="excerpts">
+            <b>{t("fEvidence")} ({c.excerpts.length}/{LIMITS.excerpts})</b>
+            <ol>
+              {c.excerpts.map((e, i) => (
+                <li key={e}>
+                  <span>{e}</span>{" "}
+                  <button type="button" className="link" onClick={() => dispatch({ type: "removeExcerpt", index: i })}>{t("removeExcerpt")}</button>
+                </li>
+              ))}
+            </ol>
+          </div>
+        )}
+      </div>
+    </Panel>
+  );
+}
+
+const INDIAN_SCRIPT = /[ऀ-෿]/u; // Devanagari to Malayalam: Hindi, Marathi, Bengali, Tamil, Telugu, Kannada, Malayalam
+
+/**
+ * Optional: an English version of "what happened" for the cybercrime.gov.in complaint, from Amazon Translate.
+ * Sent only after a tick for that one request; the person reads and edits the English before it is used.
+ */
+function TranslateStory({ c, dispatch }: { c: CaseState; dispatch: Dispatch<Action> }) {
+  const t = useT();
+  const story = c.info.story.trim();
+  const english = c.info.storyEn;
+  const [consent, setConsent] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<StringKey | null>(null);
+  const [from, setFrom] = useKept(`trFrom:${c.id}`, ""); // the story text the English was made from
+  const latch = useRef(false);
+  const caseId = useRef(c.id);
+  caseId.current = c.id;
+  const needs = INDIAN_SCRIPT.test(story);
+  if (!needs && !english) return null;
+
+  const run = async () => {
+    if (latch.current || !consent || !story) return;
+    latch.current = true;
+    const startedFor = c.id;
+    setBusy(true);
+    setErr(null);
+    const r = await postTranslate(story);
+    latch.current = false;
+    setBusy(false);
+    setConsent(false); // another request needs a new tick
+    if (startedFor !== caseId.current) return; // the case was cleared meanwhile: drop the result
+    if (!r.ok) return setErr(r.code === "DAILY_LIMIT" ? "trLimit" : "trErr");
+    setFrom(story);
+    dispatch({ type: "info", key: "storyEn", value: r.text });
+  };
+
+  return (
+    <div className="translate" id="translate">
+      {needs && (
+        <>
+          <label className="tick">
+            <input type="checkbox" id="trconsent" checked={consent} disabled={busy} onChange={(e) => setConsent(e.target.checked)} />
+            <span>{t("trConsent")}</span>
+          </label>
+          <div className="row">
+            <button type="button" className="btn sec sm" id="trbtn" disabled={!consent || busy} onClick={() => void run()}>
+              {t(busy ? "trBusy" : english ? "trAgain" : "trButton")}
+            </button>
+          </div>
+          {err && <p role="alert" className="err">{t(err)}</p>}
+        </>
       )}
-    </section>
+      {english && (
+        <>
+          <label>
+            {t("trResult")}
+            <textarea id="info-storyEn" lang="en" rows={4} value={english} onChange={(e) => dispatch({ type: "info", key: "storyEn", value: e.target.value })} />
+          </label>
+          <small className="muted">{t("trNote")}</small>
+          {from !== "" && from !== story && <p className="warnline" role="status">{t("trStale")}</p>}
+          <button type="button" className="link" id="trremove" onClick={() => (dispatch({ type: "info", key: "storyEn", value: "" }), setFrom(""))}>
+            {t("trRemove")}
+          </button>
+        </>
+      )}
+    </div>
   );
 }
 
 // ------------------------------------------------------------------------------------------------- pack
 
-function PackView({ c, dispatch }: { c: CaseState; dispatch: Dispatch<Action> }) {
+const TABS = [["script", "tScript"], ["portal", "tPortal"], ["bank", "tBank"], ["print", "tPrint"]] as const;
+
+/** Every output is built only from confirmed facts at one revision. */
+function Outputs({ c }: { c: CaseState }) {
   const t = useT();
   const lang = useLang();
+  const [tab, setTab] = usePlace("tab", "script", (v) => TABS.some(([k]) => k === v));
   const f = useMemo(() => facts(c), [c]);
   const suspects = splitList(c.info.suspects);
   const links = splitList(c.info.links);
   const script = useMemo(() => build1930Script(f, lang, suspects), [f, lang, c.info.suspects]); // eslint-disable-line react-hooks/exhaustive-deps
   const cards = useMemo(() => buildNcrpCards(f, suspects, links), [f, c.info.suspects, c.info.links]); // eslint-disable-line react-hooks/exhaustive-deps
   const email = useMemo(() => buildBankEmail(f), [f]);
-  const all = [script, cards.map((cd) => [`## ${cd.title}`, ...cd.fields.map((x) => `${x.label}: ${x.value}`)].join("\n")).join("\n\n"), `Subject: ${email.subject}\n\n${email.body}`].join("\n\n----------\n\n");
-  const keys: AttestKey[] = ["called1930", "submittedPortal", "contactedBank"];
+  const bank = `Subject: ${email.subject}\n\n${email.body}`;
+  const sheet = useMemo(() => buildSheet(f, suspects, links), [f, c.info.suspects, c.info.links]); // eslint-disable-line react-hooks/exhaustive-deps
+  const synthetic = c.origin === "synthetic";
+  const { printing, print } = usePrintPack();
+  // A demo case prints its fixed scenario time; a real one the current time.
+  const printedAt = useMemo(() => {
+    const { date, time } = formatIst(c.scenarioClock ?? new Date().toISOString(), "en-IN");
+    return `${date}, ${time}`;
+  }, [c.scenarioClock, printing]); // eslint-disable-line react-hooks/exhaustive-deps
+  const all = [script, cards.map((cd) => [`## ${cd.title}`, ...cd.fields.map((x) => `${x.label}: ${x.value}`)].join("\n")).join("\n\n"), bank].join("\n\n----------\n\n");
 
   return (
-    <section aria-labelledby="pack-h" className="flex flex-col gap-4">
-      <div>
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h2 id="pack-h" className="text-xl font-bold">{t("packTitle")}</h2>
-          <span className="rounded-full bg-sky-50 px-2.5 py-0.5 text-xs font-semibold text-sky-800">{t("packRev", { n: f.rev })}</span>
-        </div>
-        <p className="mt-1 text-xs text-slate-500">{t("packLive")}</p>
-        <p className="mt-1 text-sm text-slate-600">{t("elapsedHint")}</p>
-        {f.txs.length === 0 && <p className="mt-1 text-sm text-amber-800">{t("packEmpty")}</p>}
+    <Panel title={t("secC")} id="secC" extra={<span className="rev">{t("packRev", { n: f.rev })}</span>}>
+      <div className="pad">
+        <p className="muted">{t("packLive")}</p>
+        {f.txs.length === 0 && <p className="warnline">{t("packEmpty")}</p>}
       </div>
-
-      <Card title={t("scriptTitle")} copy={script}>
-        <p className="mt-2 whitespace-pre-wrap text-base leading-relaxed text-slate-950">{script}</p>
-      </Card>
-
-      <section className="rounded-2xl border border-slate-200 bg-white p-4">
-        <label className="block">
-          <span className="font-semibold">{t("fAck")}</span>
-          <input value={c.info.ack} maxLength={64} onChange={(e) => dispatch({ type: "info", key: "ack", value: e.target.value })} className={INPUT} />
-          <span className="mt-1 block text-sm text-slate-600">{t("fAckHelp")}</span>
-        </label>
-      </section>
-
-      <section className="rounded-2xl border border-slate-200 bg-white p-4">
-        <h3 className="text-lg font-bold">{t("ncrpTitle")}</h3>
-        <p className="text-sm text-slate-600">{t("ncrpHelp")}</p>
-        <a href="https://cybercrime.gov.in" target="_blank" rel="noreferrer noopener" className="mt-2 inline-flex min-h-11 items-center rounded-lg border border-slate-300 px-3 font-semibold underline">
-          {t("ncrpOpen")}<ExternalIcon size={14} className="ml-1.5" />
-        </a>
-        {cards.map((card) => (
-          <div key={card.title} className="mt-4">
-            <h4 className="font-semibold text-slate-800">{card.title}</h4>
-            <ul className="mt-1 divide-y divide-slate-100 rounded-xl border border-slate-200">
-              {card.fields.map((x) => (
-                <li key={x.label} className="flex items-start justify-between gap-3 p-3">
-                  <div className="min-w-0">
-                    <div className="text-xs text-slate-500">{x.label}</div>
-                    <div className="select-all break-words">{x.value}</div>
-                  </div>
-                  <CopyButton text={x.value} />
-                </li>
-              ))}
-            </ul>
-          </div>
+      <div className="tabs" role="tablist">
+        {TABS.map(([k, label]) => (
+          <button key={k} type="button" role="tab" id={`tab-${k}`} aria-selected={tab === k} onClick={() => setTab(k)}>{t(label)}</button>
         ))}
-      </section>
-
-      <Card title={t("emailTitle")} copy={`Subject: ${email.subject}\n\n${email.body}`}>
-        <p className="mt-2 font-semibold">{email.subject}</p>
-        <p className="mt-2 select-all whitespace-pre-wrap text-sm">{email.body}</p>
-        <a href={email.mailto} className="mt-3 inline-flex min-h-11 items-center rounded-lg border border-slate-300 px-3 font-semibold"><MailIcon size={16} className="mr-1.5" />{t("emailOpen")}</a>
-      </Card>
-
-      <CopyButton text={all} label={t("copyAll")} big />
-
-      <section className="rounded-2xl border border-slate-200 bg-white p-4">
-        <h3 className="font-bold">{t("attestTitle")}</h3>
-        {keys.map((k) => {
-          const at = c.attest[k];
-          return (
-            <div key={k} className="mt-2">
-              <label className="flex min-h-11 items-center gap-2">
-                <input type="checkbox" className="h-5 w-5" checked={at != null} onChange={(e) => dispatch({ type: "attest", key: k, on: e.target.checked })} />
-                {t(`attest_${k}` as StringKey)}
-              </label>
-              {at != null && at !== c.factsRev && <p className="ml-7 flex items-start gap-1.5 text-sm text-amber-800"><AlertIcon size={16} className="mt-0.5 shrink-0" />{t("attestStale", { n: at })}</p>}
+      </div>
+      <div className="pad" role="tabpanel">
+        {tab === "script" && (
+          <>
+            <div className="row">
+              <ReadButton from={["src-script"]} />
+              <CopyButton text={script} />
             </div>
-          );
-        })}
-      </section>
-    </section>
+            <pre className="doc" id="src-script" lang={lang}>{script}</pre>
+          </>
+        )}
+        {tab === "portal" && (
+          <>
+            <p>{t("ncrpHelp")} {t("englishNote")}</p>
+            {cards.map((card) => (
+              <div key={card.title}>
+                <h3 lang="en">{card.title}</h3>
+                <table>
+                  <tbody>
+                    {card.fields.map((x) => (
+                      <tr key={x.label}>
+                        <th scope="row" lang="en">{x.label}</th>
+                        <td lang="en">{x.value}</td>
+                        <td className="act"><CopyButton text={x.value} name={x.label} /></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ))}
+            <p><Ext href="https://cybercrime.gov.in">{t("ncrpOpen")}</Ext></p>
+          </>
+        )}
+        {tab === "bank" && (
+          <>
+            <p>{t("englishNote")}</p>
+            <div className="row">
+              <CopyButton text={bank} />
+              <a className="btn sm" href={email.mailto}>{t("emailOpen")}</a>
+            </div>
+            <pre className="doc" lang="en">{bank}</pre>
+          </>
+        )}
+        {tab === "print" && (
+          <>
+            <p>{t("printPackHelp")}</p>
+            <div className="sheet-preview">
+              <PackSheet sheet={sheet} synthetic={synthetic} printedAt={printedAt} />
+            </div>
+          </>
+        )}
+        <PrintPortal active={printing}>
+          <PackSheet sheet={sheet} synthetic={synthetic} printedAt={printedAt} />
+        </PrintPortal>
+        <div className="row">
+          <button type="button" className="btn sm" id="printpack" disabled={printing} onClick={() => print(sheetTitle(f.rev, synthetic))}>{t("printPack")}</button>
+          <CopyButton text={all} label={t("copyAll")} />
+          <button type="button" className="btn sec sm" id="download" onClick={() => saveFile(`\ufeff${all}`, "text/plain", "asli-ya-nakli-report.txt")}>{t("download")}</button>
+        </div>
+      </div>
+    </Panel>
   );
 }
 
-function Card({ title, copy, children }: { title: string; copy: string; children: ReactNode }) {
+function Attest({ c, dispatch }: { c: CaseState; dispatch: Dispatch<Action> }) {
+  const t = useT();
+  const keys: AttestKey[] = ["called1930", "submittedPortal", "contactedBank"];
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-4">
-      <div className="flex items-start justify-between gap-2">
-        <h3 className="text-lg font-bold">{title}</h3>
-        <CopyButton text={copy} />
+    <Panel title={t("secD")} id="secD">
+      <div className="pad" id="attest">
+        {keys.map((k) => {
+          const at = c.attest[k];
+          return (
+            <label className="tick" key={k}>
+              <input id={`att-${k}`} type="checkbox" checked={at != null} onChange={(e) => dispatch({ type: "attest", key: k, on: e.target.checked })} />
+              <span>
+                {t(`attest_${k}` as StringKey)}
+                {at != null && at !== c.factsRev && <em className="err">{t("attestStale", { n: at })}</em>}
+              </span>
+            </label>
+          );
+        })}
       </div>
-      {children}
-    </section>
+    </Panel>
+  );
+}
+
+/** A calendar file with fixed wording and the chosen time: no case details go into it. */
+function Reminder() {
+  const t = useT();
+  const [when, setWhen] = useKept("remind", "");
+  const input = useRef<HTMLInputElement>(null);
+  const make = () => {
+    const start = new Date(when);
+    if (Number.isNaN(start.getTime())) {
+      toast(t("errTime"));
+      input.current?.focus();
+      return;
+    }
+    saveFile(reminderIcs(start, t("remEv"), t("remN")), "text/calendar", "asli-ya-nakli-reminder.ics");
+  };
+  return (
+    <Panel title={t("remT")}>
+      <div className="pad remind">
+        <label>
+          {t("remL")}
+          <input id="remind" ref={input} type="datetime-local" value={when} onChange={(e) => setWhen(e.target.value)} />
+        </label>
+        <button type="button" className="btn sec" onClick={make}>{t("remB")}</button>
+      </div>
+    </Panel>
+  );
+}
+
+const EVIDENCE: StringKey[] = ["ev1", "ev2", "ev3", "ev4", "ev5"];
+
+function Evidence({ caseId }: { caseId: string }) {
+  const t = useT();
+  const [done, setDone] = useKept<string[]>(`evidence:${caseId}`, []);
+  return (
+    <Panel title={t("secE")} id="secE">
+      <div className="pad">
+        {EVIDENCE.map((k) => (
+          <label className="tick" key={k}>
+            <input type="checkbox" checked={done.includes(k)} onChange={(e) => setDone(e.target.checked ? [...done, k] : done.filter((x) => x !== k))} />
+            <span>{t(k)}</span>
+          </label>
+        ))}
+        <small>{t("ticks")}</small>
+      </div>
+    </Panel>
   );
 }

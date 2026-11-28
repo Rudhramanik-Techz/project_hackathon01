@@ -77,6 +77,40 @@ function basicNormalise(text: string): string {
   return t.split(/\s+/u).filter(Boolean).join(" ");
 }
 
+// Same patterns as backend/common/rules.py: a sentence that only warns people off is removed before matching.
+// Every pattern must reach the end of the sentence within a short tail, so a threat that follows the warning
+// in the same sentence keeps the sentence.
+const PROTECTIVE: RegExp[] = [
+  /^[^,;]{0,40}\b(police|cbi|ed|bank|banks|rbi|sbi|officials?|officers?|government|govt|agency|agencies|courts?|we)\b[^,;:]{0,60}\bnever\b[^,;:]{0,20}\b(arrests?|asks?|calls?|questions?|demands?|requests?)\b[^,;:—]{0,45}$/u,
+  /^(please )?(do not|dont|never) (share|disclose|reveal|give|send|transfer|pay|click)\b[^,;:]{0,40}\b(otp|pin|cvv|password|money|links?|card details|bank details|account details)\b[^,;:]{0,30}$/u,
+  /(otp|pin|cvv|ओटीपी|पिन|पासवर्ड)[^,;:]{0,40}(साझा (न|ना|नहीं) करें|शेयर (न|ना|नहीं) करें|(न|ना|मत) बता)[^,;:]{0,12}$/u,
+  /(पुलिस|सीबीआई|बैंक|आरबीआई)[^,;:]{0,60}(कभी|वीडियो कॉल पर)[^,;:]{0,60}नहीं (करती|करता|करते|मांगती|मांगता|मांगते|माँगती|माँगता|माँगते)[^,;:]{0,15}$/u,
+  /^(no|none of the) (real |genuine )?(government|govt|police|cbi|bank|banks|rbi|agency|agencies|officials?|officers?)( agency| agencies| department| officers?| officials?)? (ever |will ever |will )?(asks?|demands?|tells?|calls?)\b[^,;:—]{0,60}$/u,
+  /(otp|pin|cvv|ஓடிபி)[^,;:]{0,40}(பகிர வேண்டாம்|பகிராதீர்கள்|சொல்ல வேண்டாம்)[^,;:]{0,12}$/u,
+  /(காவல்துறை|போலீஸ்|வங்கி|சிபிஐ)[^,;:]{0,120}(மாட்டார்கள்|மாட்டாது)[^,;:]{0,15}$/u,
+];
+// Standard advisories, matched as complete sentences with no room for anything else.
+const SAFE_SENTENCES: RegExp[] = [
+  /^([a-z0-9 ]{0,30}\b(advisory|warns?|warning|alert|reminder|fraud|remember) ?: ?)?(the )?(police|cbi|ed|rbi|government|govt|law enforcement)( and (the )?(police|cbi|ed))?( officers?| officials?| agencies)? (never|do not|does not|dont|doesnt|will not|wont|cannot|cant|will never|can never) arrests? ((anyone|people|citizens|you) )?(over|on|through|via|by) (a )?(video|phone|audio|whatsapp|skype)( or (video|phone))? ?calls?[.!]*$/u,
+  /^([a-z0-9 ]{0,30}\b(advisory|warns?|warning|alert|reminder|fraud|remember) ?: ?)?(there is no such thing as (a )?digital arrest|there is no digital arrest|digital arrest (is not real|does not exist|is (a )?(fake|scam|fraud|hoax|myth)))( in (india|law|indian law))?[.!]*$/u,
+  /^(beware|be aware|be careful|be alert|stay alert|stay safe|watch out)( of| from| against| for)? (the )?(fake )?digital arrest( calls?| scams?| frauds?| cases?)*[.!]*$/u,
+  /^(please )?(report (such|these|this|suspicious|fraud)( calls?| messages?)? (to|on|at)|call|dial) 1930( or (visit )?(www\.)?cybercrime\.gov\.in)?( immediately| at once| now| right away)?[.!]*$/u,
+];
+// Anything that turns a warning back into an instruction keeps the whole sentence.
+const NOT_PROTECTIVE =
+  /\b(but|otherwise|unless|until|instead|only|except|else|if|however|so|therefore|because|now|immediately|urgently|pay|face)\b|\byou (are|have)\b|\bwarrant is\b|\bunder arrest\b|\bstay on\b|\bwill be (arrested|blocked|disconnected|frozen)\b|https?|www\.|[0-9०-९௦-௯]{6,}|लेकिन|वरना|नहीं तो|सिवाय|केवल|सिर्फ|तुरंत|ट्रांसफर|भेज|रहें|ஆனால்|இல்லையெனில்|தவிர|மட்டும்|உடனே|அனுப்ப|இருங்கள்/u;
+const SENTENCE_END = /(?<=[.!?।])\s+|\n+/u;
+
+function dropWarnings(text: string): string {
+  const sentences = text.normalize("NFC").split(SENTENCE_END);
+  const kept = sentences.filter((sentence) => {
+    const low = sentence.toLowerCase().replace(/['‘’`´]/g, "").trim();
+    if (SAFE_SENTENCES.some((p) => p.test(low))) return false;
+    return NOT_PROTECTIVE.test(low) || !PROTECTIVE.some((p) => p.test(low));
+  });
+  return kept.length === sentences.length ? text : kept.join(" ");
+}
+
 export class Engine {
   readonly rules: Rule[] = [];
   readonly combos: Combo[] = [];
@@ -125,6 +159,15 @@ export class Engine {
   }
 
   normalise(text: string): string {
+    const stripped = dropWarnings(text);
+    if (stripped === text) return this.normaliseWhole(text);
+    const remainder = this.normaliseWhole(stripped);
+    // Warnings are dropped only when nothing else in the message scores; a warning placed in front of a
+    // threat must never lower its score.
+    return this.evaluate(remainder).score > 0 ? this.normaliseWhole(text) : remainder;
+  }
+
+  private normaliseWhole(text: string): string {
     const basic = basicNormalise(text);
     return this.synonymRe ? basic.replace(this.synonymRe, (_m, g: string) => this.synonyms.get(g) ?? g) : basic;
   }
@@ -179,8 +222,9 @@ export function withinLimit(text: string, max = MAX_SCALARS): boolean {
 
 /** Hide numbers that could be OTPs, PINs, card or account numbers before a message becomes evidence. */
 export function redact(text: string): string {
-  return text.replace(/\d[\d -]{2,}\d/g, (m) => {
-    const digits = m.replace(/\D/g, "");
+  // \p{Nd} covers Devanagari, Tamil and every other script's digits, not just 0-9.
+  return text.replace(/\p{Nd}[\p{Nd} -]{2,}\p{Nd}/gu, (m) => {
+    const digits = m.replace(/\P{Nd}/gu, "");
     return digits.length >= 4 ? "•".repeat(Math.min(digits.length, 8)) : m;
   });
 }

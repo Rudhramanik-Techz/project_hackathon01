@@ -57,7 +57,8 @@ if [ "$CLOUDFRONT" = true ]; then
   DIST=$(out DistributionId)
   echo "== upload site to s3://$BUCKET"
   # Hashed assets are immutable; everything else must revalidate so new deploys show up.
-  aws s3 sync frontend/dist "s3://$BUCKET" --delete \
+  # No --delete: the previous build's hashed files stay, so open tabs and a rollback still find them.
+  aws s3 sync frontend/dist "s3://$BUCKET" \
     --exclude "index.html" --exclude "sw.js" --exclude "registerSW.js" --exclude "manifest.webmanifest" \
     --exclude "workbox-*.js" --exclude "audio/*" --exclude "samples/*" --exclude "eval-report.md" \
     --cache-control "public, max-age=31536000, immutable"

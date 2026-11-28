@@ -43,6 +43,59 @@ _KEEP_SYMBOLS = {"%"}
 _REPEATED_LETTER = re.compile(r"([^\W\d_])\1{2,}")
 
 
+# A sentence that only warns people off ("police never arrest on a video call", "never share your OTP")
+# is removed before matching, so genuine advice is not scored as the scam it describes.
+# frontend/src/lib/checker.ts holds the same patterns; tests/test_parity.py keeps the two in step.
+_PROTECTIVE = tuple(
+    re.compile(p, re.ASCII)
+    for p in (
+        # Every pattern must reach the end of the sentence within a short tail, so a threat that follows the
+        # warning in the same sentence keeps the sentence.
+        r"^[^,;]{0,40}\b(police|cbi|ed|bank|banks|rbi|sbi|officials?|officers?|government|govt|agency|agencies|courts?|we)\b"
+        r"[^,;:]{0,60}\bnever\b[^,;:]{0,20}\b(arrests?|asks?|calls?|questions?|demands?|requests?)\b[^,;:—]{0,45}$",
+        r"^(please )?(do not|dont|never) (share|disclose|reveal|give|send|transfer|pay|click)\b"
+        r"[^,;:]{0,40}\b(otp|pin|cvv|password|money|links?|card details|bank details|account details)\b[^,;:]{0,30}$",
+        r"(otp|pin|cvv|ओटीपी|पिन|पासवर्ड)[^,;:]{0,40}(साझा (न|ना|नहीं) करें|शेयर (न|ना|नहीं) करें|(न|ना|मत) बता)[^,;:]{0,12}$",
+        r"(पुलिस|सीबीआई|बैंक|आरबीआई)[^,;:]{0,60}(कभी|वीडियो कॉल पर)[^,;:]{0,60}नहीं (करती|करता|करते|मांगती|मांगता|मांगते|माँगती|माँगता|माँगते)[^,;:]{0,15}$",
+        r"^(no|none of the) (real |genuine )?(government|govt|police|cbi|bank|banks|rbi|agency|agencies|officials?|officers?)( agency| agencies| department| officers?| officials?)? (ever |will ever |will )?(asks?|demands?|tells?|calls?)\b[^,;:—]{0,60}$",
+        r"(otp|pin|cvv|ஓடிபி)[^,;:]{0,40}(பகிர வேண்டாம்|பகிராதீர்கள்|சொல்ல வேண்டாம்)[^,;:]{0,12}$",
+        r"(காவல்துறை|போலீஸ்|வங்கி|சிபிஐ)[^,;:]{0,120}(மாட்டார்கள்|மாட்டாது)[^,;:]{0,15}$",
+    )
+)
+# Standard advisories, matched as complete sentences with no room for anything else, so words such as
+# "immediately" are allowed in them.
+_SAFE_SENTENCES = tuple(
+    re.compile(p, re.ASCII)
+    for p in (
+        r"^([a-z0-9 ]{0,30}\b(advisory|warns?|warning|alert|reminder|fraud|remember) ?: ?)?(the )?(police|cbi|ed|rbi|government|govt|law enforcement)( and (the )?(police|cbi|ed))?( officers?| officials?| agencies)? (never|do not|does not|dont|doesnt|will not|wont|cannot|cant|will never|can never) arrests? ((anyone|people|citizens|you) )?(over|on|through|via|by) (a )?(video|phone|audio|whatsapp|skype)( or (video|phone))? ?calls?[.!]*$",
+        r"^([a-z0-9 ]{0,30}\b(advisory|warns?|warning|alert|reminder|fraud|remember) ?: ?)?(there is no such thing as (a )?digital arrest|there is no digital arrest|digital arrest (is not real|does not exist|is (a )?(fake|scam|fraud|hoax|myth)))( in (india|law|indian law))?[.!]*$",
+        r"^(beware|be aware|be careful|be alert|stay alert|stay safe|watch out)( of| from| against| for)? (the )?(fake )?digital arrest( calls?| scams?| frauds?| cases?)*[.!]*$",
+        r"^(please )?(report (such|these|this|suspicious|fraud)( calls?| messages?)? (to|on|at)|call|dial) 1930( or (visit )?(www\.)?cybercrime\.gov\.in)?( immediately| at once| now| right away)?[.!]*$",
+    )
+)
+# Anything that turns a warning back into an instruction keeps the whole sentence.
+_NOT_PROTECTIVE = re.compile(
+    r"\b(but|otherwise|unless|until|instead|only|except|else|if|however|so|therefore|because|now|immediately|urgently|pay|face)\b"
+    r"|\byou (are|have)\b|\bwarrant is\b|\bunder arrest\b|\bstay on\b|\bwill be (arrested|blocked|disconnected|frozen)\b|https?|www\."
+    r"|[0-9०-९௦-௯]{6,}"
+    r"|लेकिन|वरना|नहीं तो|सिवाय|केवल|सिर्फ|तुरंत|ट्रांसफर|भेज|रहें|ஆனால்|இல்லையெனில்|தவிர|மட்டும்|உடனே|அனுப்ப|இருங்கள்",
+    re.ASCII,
+)
+_SENTENCE_END = re.compile(r"(?<=[.!?।])\s+|\n+")
+
+
+def _drop_warnings(text: str) -> str:
+    sentences = _SENTENCE_END.split(unicodedata.normalize("NFC", text))
+    kept: list[str] = []
+    for sentence in sentences:
+        low = sentence.lower().translate(_APOSTROPHES).strip()
+        if not any(p.search(low) for p in _SAFE_SENTENCES) and (
+            _NOT_PROTECTIVE.search(low) or not any(p.search(low) for p in _PROTECTIVE)
+        ):
+            kept.append(sentence)
+    return text if len(kept) == len(sentences) else " ".join(kept)
+
+
 def _basic_normalise(text: str) -> str:
     """NFC, lowercase, drop apostrophes, punctuation/emoji -> space, collapse 3+ repeated letters."""
     text = unicodedata.normalize("NFC", text).lower().translate(_APOSTROPHES)
@@ -168,6 +221,15 @@ class Engine:
         return cls(rules, combos, synonyms)
 
     def normalise(self, text: str) -> str:
+        stripped = _drop_warnings(text)
+        if stripped is text:
+            return self._normalise_whole(text)
+        remainder = self._normalise_whole(stripped)
+        # Warnings are dropped only when nothing else in the message scores; a warning placed in front of a
+        # threat must never lower its score.
+        return self._normalise_whole(text) if self.evaluate(remainder).score > 0 else remainder
+
+    def _normalise_whole(self, text: str) -> str:
         basic = _basic_normalise(text)
         if self._synonym_re is None:
             return basic

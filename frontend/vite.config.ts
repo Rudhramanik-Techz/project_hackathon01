@@ -10,15 +10,17 @@ export default defineConfig({
     react(),
     tailwindcss(),
     VitePWA({
-      registerType: "autoUpdate",
-      injectRegister: "auto",
+      // "prompt": a new version never activates by itself, so it cannot swap the app under an open case (the
+      // case lives only in memory). App.tsx applies it when no case is open; otherwise on the next fresh open.
+      registerType: "prompt",
+      injectRegister: false, // registered in App.tsx, which decides when a waiting update is applied
       includeAssets: ["icon.svg", "favicon.svg", "samples/*.jpg", "audio/**/*.mp3", "eval-report.md"],
       manifest: {
         name: "Asli Ya Nakli?",
         short_name: "Asli Ya Nakli",
         description: "Paid a scammer? Get your 1930 call script and cybercrime report pack in seconds.",
-        theme_color: "#0b2545",
-        background_color: "#f8fafc",
+        theme_color: "#14513f",
+        background_color: "#ffffff",
         display: "standalone",
         start_url: "/",
         icons: [{ src: "icon.svg", sizes: "any", type: "image/svg+xml", purpose: "any" }],

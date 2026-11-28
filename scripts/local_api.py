@@ -26,6 +26,7 @@ ROUTES: list[tuple[str, str, str]] = [
     ("GET", "/api/v3/health", "health.handler"),
     ("POST", "/api/v3/ocr", "ocr_api.handler"),
     ("POST", "/api/v3/explain", "explain_api.handler"),
+    ("POST", "/api/v3/translate", "translate_api.handler"),
 ]
 
 

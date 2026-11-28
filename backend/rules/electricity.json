@@ -3,8 +3,8 @@
     "id": "EL-01", "family": "electricity", "weight": 40,
     "any": ["(electricity|power|bijli|light|current|electric) (connection |supply )?(will be |shall be )?(disconnect|disconnected|cut|kat|katega|kaat|band)",
             "disconnection",
-            "(बिजली|लाइट) .{0,15}(काट|कट|बंद)",
-            "மின் ?(இணைப்பு|சாரம்|விநியோகம்)? .{0,15}(துண்டிக்க|நிறுத்த|துண்டிப்பு)"],
+            "(electricity|बिजली|लाइट) .{0,30}(काट|कट (जाए(गी|गा)|जाये(गी|गा)|दी|कर)|बंद (कर|की जा))",
+            "(electricity|மின் ?(இணைப்பு|சாரம்|விநியோகம்)?)\\S{0,6} .{0,40}(துண்டிக்க|நிறுத்த|துண்டிப்பு)"],
     "reason": {
       "en": "It threatens to cut your electricity connection. Electricity boards send written notices; they don't threaten by SMS from a personal number.",
       "hi": "बिजली कनेक्शन काटने की धमकी दी गई है। बिजली विभाग लिखित नोटिस भेजता है, निजी नंबर से SMS पर धमकी नहीं देता।",
@@ -37,7 +37,7 @@
   {
     "id": "EL-04", "family": "electricity", "weight": 20, "signal": "authority",
     "any": ["electricity (officer|department|board)", "(contact|call) (our |the |this )?(electricity )?(officer|department)",
-            "(bijli|electricity) (vibhag|office)", "बिजली (अधिकारी|विभाग)", "மின் ?(வாரிய|அதிகாரி)"],
+            "(bijli|electricity) (vibhag|office)", "(electricity|बिजली) (अधिकारी|विभाग)", "மின் ?(வாரிய|அதிகாரி)"],
     "reason": {
       "en": "It asks you to call an 'electricity officer' on a mobile number.",
       "hi": "मोबाइल नंबर पर किसी 'बिजली अधिकारी' को कॉल करने को कहा गया है।",

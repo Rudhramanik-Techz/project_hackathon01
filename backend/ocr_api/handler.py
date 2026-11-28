@@ -11,7 +11,7 @@ import time
 from common import config
 from common.errors import (ApiError, image_too_large, invalid_image, invalid_request, ocr_deadline,
                            unavailable, unsupported_media)
-from common.http import Request, api_handler, single_uuid_header
+from common.http import Request, api_handler, browser_origin_ok, single_uuid_header
 from common.jpeg import jpeg_size
 from common.ledger import get_ledger
 from common.log import log_event
@@ -23,6 +23,9 @@ MAX_BYTES = 1_200_000
 MAX_EDGE = 1600
 MAX_PIXELS = 2_560_000
 MAX_RESPONSE_BYTES = 32_768
+APP_BUDGET_S = 7.0  # spec §7: application budget from handler entry (Lambda timeout is 10 s)
+HEADROOM_S = 0.5  # parsing and serialising after the provider answers
+MIN_PROVIDER_S = 1.0  # less than this left: do not start the provider at all
 
 
 def _serialize(body: dict) -> dict:
@@ -39,7 +42,7 @@ def _serialize(body: dict) -> dict:
 @api_handler(ROUTE)
 def handler(req: Request) -> tuple[int, dict]:
     with req.tracer.stage("validate"):
-        if req.has_query:
+        if req.has_query or not browser_origin_ok(req):
             raise invalid_request()
         content_type = (req.header("content-type") or "").strip().lower()
         if content_type != "image/jpeg":
@@ -58,11 +61,18 @@ def handler(req: Request) -> tuple[int, dict]:
         if max(width, height) > MAX_EDGE or width * height > MAX_PIXELS:
             raise image_too_large()
 
+    # Never spend an admission that cannot be used: the provider needs its full deadline plus headroom.
+    if APP_BUDGET_S - req.tracer.elapsed_s() < PROVIDER_DEADLINE_S + HEADROOM_S:
+        raise unavailable()
+
     now = time.time()  # trusted server time, sampled once
     with req.tracer.stage("admission"):
         admission = get_ledger().admit(key, now)
 
-    # Admitted: exactly one provider attempt. No retry on any outcome.
+    # Admitted: at most one provider attempt, inside what is left of the budget. No retry on any outcome.
+    deadline = min(PROVIDER_DEADLINE_S, APP_BUDGET_S - req.tracer.elapsed_s() - HEADROOM_S)
+    if deadline < MIN_PROVIDER_S:
+        raise unavailable()  # the admission stays spent; nothing is dispatched
     dispatched = time.monotonic()
     try:
         with req.tracer.stage("provider"):
@@ -72,7 +82,7 @@ def handler(req: Request) -> tuple[int, dict]:
     except OcrError as exc:
         log_event(level="warn", requestId=req.request_id, route=ROUTE, providerError=str(exc)[:64])
         raise unavailable() from None
-    if time.monotonic() - dispatched >= PROVIDER_DEADLINE_S:
+    if time.monotonic() - dispatched >= deadline:
         raise ocr_deadline()  # a result at or after the cutoff is late, even if valid
 
     with req.tracer.stage("parse"):

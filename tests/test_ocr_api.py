@@ -189,3 +189,43 @@ def test_extracted_values_never_logged(upload, capsys):
     out = capsys.readouterr().out
     for secret in ("012345678901", "demo.merchant", "100050"):
         assert secret not in out
+
+
+@pytest.mark.parametrize(
+    ("headers", "ok"),
+    [
+        ({}, True),  # no Origin: not a cross-site browser call (the ledger still limits spending)
+        ({"origin": "https://evil.example", "sec-fetch-site": "cross-site"}, False),
+        ({"origin": "https://evil.example"}, False),
+        ({"origin": "http://localhost:5173", "sec-fetch-site": "same-origin"}, True),  # dev proxy
+    ],
+)
+def test_cross_site_browser_calls_are_refused_before_admission(upload, provider_calls, headers, ok):
+    status, body, _ = upload(headers=headers)
+    if ok:
+        assert status == 200
+    else:
+        assert (status, body["error"]["code"]) == (400, "INVALID_REQUEST") and provider_calls == []
+
+
+def test_origin_matching_the_host_is_allowed(upload):
+    status, _, _ = upload(headers={"origin": "https://site.example", "host": "site.example"})
+    assert status == 200
+
+
+def test_no_admission_when_the_budget_cannot_fit_the_provider(upload, provider_calls, monkeypatch):
+    from common.trace import Tracer
+
+    monkeypatch.setattr(Tracer, "elapsed_s", lambda self: 2.5)  # 7 - 2.5 < 4.5 + 0.5
+    status, body, _ = upload()
+    assert (status, body["error"]["code"]) == (503, "TEMPORARILY_UNAVAILABLE") and provider_calls == []
+    assert ledger.get_ledger().admit(new_id(), 1_800_000_000.0).used_today == 1  # nothing was spent
+
+
+def test_slow_admission_dispatches_nothing(upload, provider_calls, monkeypatch):
+    from common.trace import Tracer
+
+    times = iter([0.1, 6.0])
+    monkeypatch.setattr(Tracer, "elapsed_s", lambda self: next(times, 6.0))
+    status, body, _ = upload()
+    assert (status, body["error"]["code"]) == (503, "TEMPORARILY_UNAVAILABLE") and provider_calls == []

@@ -147,3 +147,35 @@ export async function postExplain(req: { lang: string; tier: string; family: str
     t.done();
   }
 }
+
+/**
+ * The person's own "what happened" text -> English for the complaint (Amazon Translate, Mumbai). Sent only after
+ * an explicit tick; never retried automatically. The result is a proposal the person reviews and edits.
+ */
+export async function postTranslate(text: string): Promise<{ ok: true; text: string; sourceLang: string } | Failure> {
+  const t = withTimeout(9_000);
+  try {
+    const res = await fetch("/api/v3/translate", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text }),
+      signal: t.signal,
+      cache: "no-store",
+    });
+    let body: unknown = null;
+    try {
+      body = await readJson(res);
+    } catch {
+      return { ok: false, code: res.ok ? "BAD_RESPONSE" : `HTTP_${res.status}` };
+    }
+    if (!res.ok) return { ok: false, code: errorCode(body, res.status) };
+    const b = body as { v?: unknown; text?: unknown; sourceLang?: unknown };
+    if (b?.v !== 3 || typeof b.text !== "string" || !b.text.trim() || b.text.length > 4000 || typeof b.sourceLang !== "string")
+      return { ok: false, code: "BAD_RESPONSE" };
+    return { ok: true, text: b.text.trim(), sourceLang: b.sourceLang };
+  } catch {
+    return { ok: false, code: t.signal.aborted ? "TIMEOUT" : "NETWORK" };
+  } finally {
+    t.done();
+  }
+}

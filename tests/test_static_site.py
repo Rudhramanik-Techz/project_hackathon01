@@ -67,3 +67,12 @@ def test_path_traversal_blocked(site):
 def test_api_paths_get_json_404(site):
     r = site.handler({"rawPath": "/api/v3/nope", "headers": {}}, None)
     assert r["statusCode"] == 404 and json.loads(r["body"])["error"]["code"] == "UNKNOWN_ROUTE"
+
+
+def test_head_matches_get_without_a_body(site):
+    for path, status in (("/", 200), ("/assets/app-abc.js", 200), ("/assets/missing.js", 404)):
+        event = {"rawPath": path, "headers": {"accept-encoding": "gzip"}, "requestContext": {"http": {"method": "HEAD"}}}
+        r = site.handler(event, None)
+        assert r["statusCode"] == status and r["body"] == ""
+        assert "content-encoding" not in r["headers"]
+        assert "frame-ancestors 'none'" in r["headers"]["content-security-policy"]

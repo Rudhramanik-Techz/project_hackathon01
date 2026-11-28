@@ -62,6 +62,15 @@ def _response(status: int, body: bytes, content_type: str, cache: str, gzip_ok: 
 
 
 def handler(event: dict, context: object) -> dict:
+    response = _get(event)
+    method = ((event.get("requestContext") or {}).get("http") or {}).get("method", "GET").upper()
+    if method == "HEAD":  # same status and headers as GET, no body
+        headers = {k: v for k, v in response["headers"].items() if k not in ("content-encoding", "vary")}
+        return {"statusCode": response["statusCode"], "headers": headers, "body": "", "isBase64Encoded": False}
+    return response
+
+
+def _get(event: dict) -> dict:
     path = event.get("rawPath") or "/"
     if path.startswith("/api/"):
         body = json.dumps({"v": 3, "error": {"code": "UNKNOWN_ROUTE", "requestId": str(uuid.uuid4())}}).encode()
