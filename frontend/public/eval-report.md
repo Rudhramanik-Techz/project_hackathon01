@@ -1,6 +1,6 @@
 # Evaluation report
 
-Generated 2026-11-27 14:29 by `scripts/run_eval.py`; rules version `78c4113fe037`.
+Generated 2026-11-27 21:32 by `scripts/run_eval.py`; rules version `78c4113fe037`.
 
 ## Scam check: held-out set (headline)
 

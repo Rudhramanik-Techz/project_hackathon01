@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "skills": {
+    "animate": {
+      "source": "emilkowalski/skills",
+      "sourceType": "github",
+      "skillPath": "skills/animate/SKILL.md",
+      "computedHash": "1d4471c7a77610ca37db8085398f387b60fbcc739379a1b0f68a056062fcf594"
+    },
+    "apple-design": {
+      "source": "emilkowalski/skills",
+      "sourceType": "github",
+      "skillPath": "skills/apple-design/SKILL.md",
+      "computedHash": "83f1764a12784daa0d3982341f549974fb49e13f102f6f18e23241cd925251af"
+    },
+    "gestures": {
+      "source": "emilkowalski/skills",
+      "sourceType": "github",
+      "skillPath": "skills/gestures/SKILL.md",
+      "computedHash": "f701935046c6d5f122a3977968c49b3aeed432f9746e098950336d33a66b3c18"
+    },
+    "pick-ui-library": {
+      "source": "emilkowalski/skills",
+      "sourceType": "github",
+      "skillPath": "skills/pick-ui-library/SKILL.md",
+      "computedHash": "937cc20ce6b3a3b82b4a2584958e65ab576f5739b8b57b1f8aacaccab4fd5f3d"
+    }
+  }
+}
